@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { Shield, Lock, Mail, ArrowLeft } from 'lucide-react';
+import Link from 'next/link';
 
 export default function LoginPage() {
   const [view, setView] = useState('login'); // 'login' or 'forgot'
