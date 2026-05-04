@@ -1,192 +1,169 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabaseClient';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { DollarSign, Percent, ShieldAlert, ArrowLeft, Download, Zap } from 'lucide-react';
 import Link from 'next/link';
+import { supabase } from '@/lib/supabaseClient'; 
+import { LayoutDashboard, Building2, Plus, ArrowRight, Activity, Globe2, Briefcase, CheckCircle2, XCircle } from 'lucide-react';
 
-export default function ClientDashboard() {
-  const [scenarios, setScenarios] = useState([]);
-  const [selectedScenario, setSelectedScenario] = useState(null);
-  const [financialData, setFinancialData] = useState([]);
+export default function DashboardOverview() {
+  const [entities, setEntities] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [waccOverride, setWaccOverride] = useState(null);
-  const [debugInfo, setDebugInfo] = useState("");
+  const [error, setError] = useState('');
 
+  // Fetch all entities belonging to the logged-in user when the page loads
   useEffect(() => {
-    checkUserAndFetch();
+    fetchEntities();
   }, []);
 
-  async function checkUserAndFetch() {
-    const { data: { session } } = await supabase.auth.getSession();
-    
-    if (!session) {
-      window.location.href = '/login';
-      return;
-    }
+  const fetchEntities = async () => {
+    try {
+      setLoading(true);
+      
+      // Because of our strict RLS policies, this query will automatically 
+      // ONLY return rows where user_id matches the currently logged-in user!
+      const { data, error: fetchError } = await supabase
+        .from('entities')
+        .select('*')
+        .order('entity_name', { ascending: true });
 
-    fetchInitialData();
-  }
+      if (fetchError) throw fetchError;
+      setEntities(data || []);
 
-  async function fetchInitialData() {
-    const params = new URLSearchParams(window.location.search);
-    const companyId = params.get('companyId');
-    
-    if (!companyId) {
-      setDebugInfo("Error: No companyId in URL");
+    } catch (err) {
+      console.error('Error fetching entities:', err);
+      setError(err.message || 'Failed to load your entities.');
+    } finally {
       setLoading(false);
-      return;
     }
-
-    const { data: scenarioList, error } = await supabase
-      .from('scenarios')
-      .select('*')
-      .eq('company_id', companyId)
-      .order('created_at', { ascending: false });
-
-    if (error) {
-      setDebugInfo(`Database Error: ${error.message}`);
-    } else if (scenarioList && scenarioList.length > 0) {
-      setScenarios(scenarioList);
-      setSelectedScenario(scenarioList[0]);
-      fetchFinancials(scenarioList[0].id);
-    } else {
-      setDebugInfo(`No scenarios found linked to this Company.`);
-    }
-    setLoading(false);
-  }
-
-  async function fetchFinancials(scenarioId) {
-    const { data } = await supabase
-      .from('banking_financials')
-      .select('*')
-      .eq('scenario_id', scenarioId)
-      .order('fiscal_year', { ascending: true });
-    
-    if (data && data.length > 0) {
-      const formatted = data.map(row => ({
-        year: `FY ${row.fiscal_year}`,
-        'Net Interest': row.net_interest_income,
-        'Non-Interest': row.non_interest_income
-      }));
-      setFinancialData(formatted);
-    } else {
-      setFinancialData([]);
-    }
-  }
-
-  const currentWacc = waccOverride !== null ? waccOverride : (selectedScenario?.wacc || 0.08);
-  
-  const calculateValuation = () => {
-    if (!financialData.length) return 0;
-    const totalPV = financialData.reduce((acc, row, index) => {
-      const year = index + 1;
-      const totalIncome = row['Net Interest'] + row['Non-Interest'];
-      const pv = totalIncome / Math.pow(1 + currentWacc, year);
-      return acc + pv;
-    }, 0);
-    return parseFloat(totalPV.toFixed(2));
   };
 
-  const modelValue = calculateValuation();
-  const analystValue = selectedScenario?.enterprise_value || 0;
-  const variance = modelValue > 0 ? (((analystValue - modelValue) / modelValue) * 100).toFixed(1) : 0;
-
-  if (loading) return <div className="p-20 text-center font-bold text-slate-400 animate-pulse">Verifying Security...</div>;
+  // Helper to render module status
+  const ModuleBadge = ({ label, isActive }) => (
+    <div className="flex items-center justify-between p-2 rounded bg-slate-50 border border-slate-100">
+      <span className="text-xs font-bold text-slate-600">{label}</span>
+      {isActive ? (
+        <CheckCircle2 size={16} className="text-emerald-500" />
+      ) : (
+        <XCircle size={16} className="text-slate-300" />
+      )}
+    </div>
+  );
 
   return (
-    <div className="min-h-screen bg-slate-50 p-4 md:p-8 font-sans">
-      <div className="max-w-7xl mx-auto">
-        
-        <div className="flex justify-between items-center mb-8 print:hidden">
-          <Link href="/" className="flex items-center gap-2 text-slate-500 hover:text-[#002D72] font-bold transition-all">
-            <ArrowLeft size={20} /> Back to Portfolio
-          </Link>
-          {debugInfo && <div className="bg-amber-100 text-amber-700 px-4 py-2 rounded-lg text-xs font-mono border border-amber-200">{debugInfo}</div>}
-          <button onClick={() => window.print()} className="bg-white border border-slate-300 px-4 py-2 rounded-lg flex items-center gap-2 font-bold text-slate-600 hover:bg-slate-50 shadow-sm">
-            <Download size={18} /> Export PDF
-          </button>
+    <div className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8 font-sans">
+      
+      {/* Header Section */}
+      <div className="mb-8 flex items-center justify-between border-b border-slate-200 pb-5">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
+            <LayoutDashboard className="text-[#002D72]" />
+            Dashboard Overview
+          </h1>
+          <p className="text-slate-500 mt-1 text-sm">Welcome to the Kunata Engine. Here are your active models.</p>
         </div>
-
-        <div className="flex justify-between items-end mb-10 border-b border-slate-200 pb-6">
-          <div>
-            <h1 className="text-4xl font-black text-slate-900 tracking-tight">Valuation Intelligence</h1>
-            <p className="text-[#C5A059] font-bold uppercase tracking-[0.2em] text-sm mt-1">Pennarth Greene & Co.</p>
-          </div>
-          <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 print:hidden">
-            <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Active Scenario</label>
-            <select 
-              className="font-bold text-slate-800 outline-none bg-transparent"
-              value={selectedScenario?.id}
-              onChange={(e) => {
-                const s = scenarios.find(item => item.id === e.target.value);
-                setSelectedScenario(s);
-                fetchFinancials(s.id);
-              }}
-            >
-              {scenarios.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-            </select>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-10">
-          <div className="bg-[#002D72] text-white p-10 rounded-3xl shadow-2xl relative overflow-hidden">
-            <Zap className="absolute right-[-20px] top-[-20px] text-white/5" size={200} />
-            <div className="relative z-10">
-              <h3 className="text-blue-200 font-bold uppercase text-xs tracking-widest mb-2 font-mono">Engine Valuation (3-Year PV)</h3>
-              <div className="text-6xl font-black mb-6 tracking-tighter">${modelValue}M</div>
-              <p className="text-blue-100/70 text-sm leading-relaxed max-w-sm">
-                Discounted Cash Flow calculation based on projected income and {(currentWacc * 100).toFixed(2)}% WACC.
-              </p>
-              
-              <div className="mt-8 pt-8 border-t border-white/10 print:hidden">
-                <div className="flex justify-between mb-2">
-                  <span className="text-[10px] font-bold uppercase text-blue-300">Live WACC Sensitivity</span>
-                  <span className="text-sm font-mono font-bold text-[#C5A059]">{(currentWacc * 100).toFixed(1)}%</span>
-                </div>
-                <input type="range" min="0.05" max="0.20" step="0.001" value={currentWacc} onChange={(e) => setWaccOverride(parseFloat(e.target.value))} className="w-full h-1.5 bg-blue-900 rounded-lg appearance-none cursor-pointer accent-[#C5A059]" />
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white p-10 rounded-3xl border border-slate-200 shadow-sm flex flex-col justify-center">
-            <h3 className="text-slate-400 font-bold uppercase text-xs tracking-widest mb-2 font-mono">Analyst Variance</h3>
-            <div className="flex items-baseline gap-4">
-              <div className={`text-6xl font-black tracking-tighter ${variance >= 0 ? 'text-[#C5A059]' : 'text-rose-600'}`}>
-                {variance > 0 ? '+' : ''}{variance}%
-              </div>
-              <div className="text-slate-400 font-bold text-xl uppercase tracking-tighter">vs DCF Model</div>
-            </div>
-            <div className="mt-6 flex items-center gap-4">
-               <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 flex-1">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Input Enterprise Value</p>
-                  <p className="text-xl font-bold text-slate-800">${analystValue}M</p>
-               </div>
-               <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 flex-1">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Risk Rating</p>
-                  <p className="text-xl font-bold text-slate-800">Grade {selectedScenario?.overall_risk_rating}</p>
-               </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white p-10 rounded-3xl border border-slate-200 shadow-sm">
-          <h2 className="text-2xl font-bold text-slate-800 mb-8 tracking-tight">Revenue Trajectory</h2>
-          <div className="h-[400px] w-full flex justify-center">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={financialData} margin={{ top: 20, right: 30, left: 0, bottom: 20 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                <XAxis dataKey="year" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 12, fontWeight: 'bold'}} />
-                <YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 12, fontWeight: 'bold'}} />
-                <Tooltip cursor={{fill: '#f8fafc'}} contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}} />
-                <Legend verticalAlign="top" align="right" iconType="circle" wrapperStyle={{paddingBottom: '20px'}} />
-                <Bar dataKey="Net Interest" fill="#002D72" radius={[6, 6, 0, 0]} barSize={60} />
-                <Bar dataKey="Non-Interest" fill="#C5A059" radius={[6, 6, 0, 0]} barSize={60} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
+        <Link 
+          href="/dashboard/entity"
+          className="bg-[#C5A059] hover:bg-[#a38042] text-white px-5 py-2.5 rounded-lg font-bold flex items-center gap-2 transition-colors shadow-sm"
+        >
+          <Plus size={18} />
+          New Entity
+        </Link>
       </div>
+
+      {error && (
+        <div className="mb-6 bg-rose-50 border border-rose-200 text-rose-700 px-4 py-3 rounded-lg text-sm font-bold">
+          {error}
+        </div>
+      )}
+
+      {/* Loading State */}
+      {loading ? (
+        <div className="flex flex-col items-center justify-center py-20 text-slate-400">
+          <Activity size={40} className="animate-spin text-[#002D72] mb-4" />
+          <p className="font-bold">Loading your secure vault...</p>
+        </div>
+      ) : (
+        <>
+          {/* Empty State (If they have no entities yet) */}
+          {entities.length === 0 ? (
+            <div className="bg-white border-2 border-dashed border-slate-300 rounded-xl p-12 text-center">
+              <Building2 size={48} className="mx-auto text-slate-300 mb-4" />
+              <h3 className="text-lg font-bold text-slate-900 mb-2">No Entities Found</h3>
+              <p className="text-slate-500 text-sm mb-6 max-w-md mx-auto">
+                You haven't set up any financial models yet. Create your first entity to unlock the full power of the Kunata Engine.
+              </p>
+              <Link 
+                href="/dashboard/entity"
+                className="inline-flex items-center gap-2 bg-[#002D72] hover:bg-[#001f4d] text-white px-6 py-3 rounded-lg font-bold transition-colors"
+              >
+                <Plus size={18} /> Setup First Entity
+              </Link>
+            </div>
+          ) : (
+            /* Entity Grid */
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+              {entities.map((entity) => (
+                <div key={entity.id} className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden flex flex-col hover:shadow-md transition-shadow">
+                  
+                  {/* Card Header */}
+                  <div className="bg-[#002D72] p-5 text-white flex items-start justify-between">
+                    <div>
+                      <h2 className="text-xl font-bold mb-1">{entity.entity_name}</h2>
+                      <div className="flex items-center gap-4 text-xs font-semibold text-blue-200">
+                        <span className="flex items-center gap-1"><Globe2 size={14}/> {entity.country_code}</span>
+                        <span className="flex items-center gap-1"><Briefcase size={14}/> {entity.industry_category}</span>
+                        <span className="bg-white/20 px-2 py-0.5 rounded text-white">FY {entity.start_year}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Card Body: Module Statuses */}
+                  <div className="p-5 flex-1 grid grid-cols-2 gap-x-6 gap-y-4">
+                    
+                    <div>
+                      <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Sector Models</h3>
+                      <div className="space-y-2">
+                        {entity.mod_bank && <ModuleBadge label="Banking (1BK)" isActive={true} />}
+                        {entity.mod_insurance && <ModuleBadge label="Insurance (2IN)" isActive={true} />}
+                        {entity.mod_reinsurance && <ModuleBadge label="Reinsurance (3RE)" isActive={true} />}
+                        {entity.mod_retail && <ModuleBadge label="Retail (6RT)" isActive={true} />}
+                        {!entity.mod_bank && !entity.mod_insurance && !entity.mod_reinsurance && !entity.mod_retail && (
+                          <div className="text-xs font-bold text-slate-400 italic p-2">No sector active</div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div>
+                      <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Core Financials</h3>
+                      <div className="space-y-2">
+                        <ModuleBadge label="Payroll (CPAY)" isActive={entity.mod_payroll} />
+                        <ModuleBadge label="Expenses (CEXP)" isActive={entity.mod_expenses} />
+                        <ModuleBadge label="Capital (CCAP)" isActive={entity.mod_capital} />
+                        <ModuleBadge label="Valuation (WACC)" isActive={entity.mod_wacc} />
+                      </div>
+                    </div>
+
+                  </div>
+
+                  {/* Card Footer */}
+                  <div className="bg-slate-50 p-4 border-t border-slate-100 flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-500 uppercase">
+                      Currency: {entity.currency}
+                    </span>
+                    <Link 
+                      href="/dashboard/entity" 
+                      className="text-sm font-bold text-[#002D72] hover:text-[#C5A059] flex items-center gap-1 transition-colors"
+                    >
+                      Edit Config <ArrowRight size={16} />
+                    </Link>
+                  </div>
+
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+
     </div>
   );
 }
