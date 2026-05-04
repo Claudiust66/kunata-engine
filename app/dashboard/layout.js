@@ -1,8 +1,8 @@
 'use client';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { Building2, Landmark, LayoutDashboard, LogOut } from 'lucide-react';
-import { supabase } from '@/lib/supabaseClient'; // Ensure this matches your path!
+import { Building2, Landmark, LayoutDashboard, LogOut, Users, Receipt, Monitor, Banknote, Calculator } from 'lucide-react';
+import { supabase } from '@/lib/supabaseClient'; 
 
 export default function DashboardLayout({ children }) {
   const pathname = usePathname();
@@ -18,6 +18,11 @@ export default function DashboardLayout({ children }) {
     { name: 'Dashboard Overview', href: '/dashboard', icon: LayoutDashboard },
     { name: 'Entity Config (DetE)', href: '/dashboard/entity', icon: Building2 },
     { name: 'Banking Sector (1BK)', href: '/dashboard/banking', icon: Landmark },
+    { name: 'Payroll Costs (CPAY)', href: '/dashboard/payroll', icon: Users },
+    { name: 'General Expenses (CEXP)', href: '/dashboard/expenses', icon: Receipt },
+    { name: 'Fixed Assets (CFAS)', href: '/dashboard/assets', icon: Monitor },
+    { name: 'Capital & Finance (CCAP)', href: '/dashboard/capital', icon: Banknote },
+    { name: 'Tax & Valuation (WACC)', href: '/dashboard/tax-wacc', icon: Calculator }, // <-- The Final Piece!
   ];
 
   return (
@@ -33,7 +38,6 @@ export default function DashboardLayout({ children }) {
         <nav className="flex-1 px-3 py-6 space-y-1">
           {navItems.map((item) => {
             const Icon = item.icon;
-            // Check if the current URL matches the button's link so we can highlight it
             const isActive = pathname === item.href; 
             
             return (
@@ -67,7 +71,6 @@ export default function DashboardLayout({ children }) {
 
       {/* RIGHT MAIN CONTENT AREA */}
       <main className="flex-1 h-screen overflow-y-auto">
-        {/* Next.js automatically injects your page.js files into this 'children' variable */}
         {children}
       </main>
 
