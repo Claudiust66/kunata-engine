@@ -51,6 +51,33 @@ export default function Navbar() {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const dropdownRef = useRef(null);
 
+  // Add these state variables if you don't have them yet
+  const [profileName, setProfileName] = useState('User');
+  const [profileTitle, setProfileTitle] = useState('Analyst');
+
+  // The function that talks to Supabase to get the latest profile
+  const fetchUserData = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data } = await supabase
+          .from('user_profiles')
+          .select('full_name, job_title')
+          .eq('id', user.id)
+          .single();
+
+        if (data) {
+          if (data.full_name) setProfileName(data.full_name);
+          if (data.job_title) setProfileTitle(data.job_title);
+        } else {
+          // Fallback to email if no profile exists yet
+          setProfileName(user.email.split('@')[0]);
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching user for Navbar:', err);
+    }
+  };
   // Close the dropdown if the user clicks outside of it
   useEffect(() => {
     function handleClickOutside(event) {
@@ -60,6 +87,36 @@ export default function Navbar() {
     }
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  // EXISTING CODE: Close the dropdown if the user clicks outside of it
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsProfileOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  // NEW CODE: Fetch data on load and listen for updates from the Settings page!
+  useEffect(() => {
+    // 1. Fetch data immediately when the Navbar first loads
+    fetchUserData();
+
+    // 2. Define what to do when we hear the "shout" from the Settings page
+    const handleProfileUpdate = () => {
+      fetchUserData(); 
+    };
+
+    // 3. Start listening
+    window.addEventListener('profileUpdated', handleProfileUpdate);
+
+    // 4. Stop listening if the component ever unmounts (cleanup)
+    return () => {
+      window.removeEventListener('profileUpdated', handleProfileUpdate);
+    };
   }, []);
 
   const handleSignOut = async () => {
@@ -101,8 +158,10 @@ export default function Navbar() {
             className="flex items-center gap-3 hover:bg-blue-800/50 p-2 rounded-xl transition-all"
           >
             <div className="text-right hidden md:block">
-              <p className="text-xs font-bold text-blue-100">Pennarth Greene</p>
-              <p className="text-[10px] text-blue-300 uppercase font-semibold tracking-wider">Analyst Session</p>
+              {/* CHANGE 1: Swapped hardcoded name for {profileName} */}
+              <p className="text-xs font-bold text-blue-100">{profileName}</p>
+              {/* CHANGE 2: Swapped hardcoded title for {profileTitle} */}
+              <p className="text-[10px] text-blue-300 uppercase font-semibold tracking-wider">{profileTitle}</p>
             </div>
             <div className="bg-blue-800/60 p-2 rounded-full text-blue-200">
               <User size={18} />
@@ -119,9 +178,13 @@ export default function Navbar() {
               
               {/* Header Section */}
               <div className="px-4 py-3 border-b border-slate-100 bg-slate-50">
-                <p className="text-sm font-bold text-slate-800">Analyst Profile</p>
-                <p className="text-xs text-slate-500 truncate mt-0.5">analyst@pennarthgreene.com</p>
+                {/* CHANGE 3: Update the dropdown header as well! */}
+                <p className="text-sm font-bold text-slate-800">{profileName}</p>
+                <p className="text-xs text-slate-500 truncate mt-0.5">{profileTitle}</p>
               </div>
+              
+              {/* Action Links */}
+              {/* ... the rest of your dropdown code stays exactly the same ... */}
               
               {/* Action Links */}
               <div className="p-2">

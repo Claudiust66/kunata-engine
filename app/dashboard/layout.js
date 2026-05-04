@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { Building2, Landmark, LayoutDashboard, LogOut, Users, Receipt, Monitor, Banknote, Calculator } from 'lucide-react';
+import { Building2, Landmark, LayoutDashboard, LogOut, Users, Receipt, Monitor, Banknote, Calculator, Settings } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient'; 
 
 export default function DashboardLayout({ children }) {
@@ -59,6 +59,17 @@ export default function DashboardLayout({ children }) {
 
         {/* BOTTOM USER ACTIONS */}
         <div className="p-4 border-t border-white/10">
+          <Link 
+            href="/dashboard/settings"
+            className={`flex items-center gap-3 px-4 py-3 w-full rounded-lg transition-colors font-medium ${
+              pathname === '/dashboard/settings' 
+                ? 'bg-[#C5A059] text-white font-bold' 
+                : 'text-slate-400 hover:bg-white/10 hover:text-white'
+            }`}
+          >
+            <Settings size={20} className={pathname === '/dashboard/settings' ? 'text-white' : ''} />
+            Settings
+          </Link>
           <button 
             onClick={handleLogout}
             className="flex items-center gap-3 px-4 py-3 w-full rounded-lg text-slate-400 hover:bg-rose-500/10 hover:text-rose-400 transition-colors font-medium"
