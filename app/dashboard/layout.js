@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { Building2, Landmark, LayoutDashboard, LogOut, Users, Receipt, Monitor, Banknote, Calculator, Settings } from 'lucide-react';
+import { Building2, Landmark, LayoutDashboard, LogOut, Users, Receipt, Monitor, Banknote, Calculator, Settings, Store, LineChart } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient'; 
 
 export default function DashboardLayout({ children }) {
@@ -16,13 +16,15 @@ export default function DashboardLayout({ children }) {
   // Your Master Navigation Menu
   const navItems = [
     { name: 'Dashboard Overview', href: '/dashboard', icon: LayoutDashboard },
+    { name: 'Valuation Engine', href: '/dashboard/valuation', icon: LineChart }, // <-- The Engine!
     { name: 'Entity Config (DetE)', href: '/dashboard/entity', icon: Building2 },
     { name: 'Banking Sector (1BK)', href: '/dashboard/banking', icon: Landmark },
+    { name: 'Retail Sector (6RT)', href: '/dashboard/retail', icon: Store }, // <-- New module!
     { name: 'Payroll Costs (CPAY)', href: '/dashboard/payroll', icon: Users },
     { name: 'General Expenses (CEXP)', href: '/dashboard/expenses', icon: Receipt },
     { name: 'Fixed Assets (CFAS)', href: '/dashboard/assets', icon: Monitor },
     { name: 'Capital & Finance (CCAP)', href: '/dashboard/capital', icon: Banknote },
-    { name: 'Tax & Valuation (WACC)', href: '/dashboard/tax-wacc', icon: Calculator }, // <-- The Final Piece!
+    { name: 'Tax & Valuation (WACC)', href: '/dashboard/tax-wacc', icon: Calculator },
   ];
 
   return (
