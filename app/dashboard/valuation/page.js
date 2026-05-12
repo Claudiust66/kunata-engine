@@ -7,14 +7,11 @@ export default function ValuationEngine() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   
-  // Selection State
   const [entities, setEntities] = useState([]);
   const [selectedEntity, setSelectedEntity] = useState('');
   
-  // Results State
   const [results, setResults] = useState(null);
 
-  // Fetch available entities on load
   useEffect(() => {
     fetchEntities();
   }, []);
@@ -57,46 +54,71 @@ export default function ValuationEngine() {
         .limit(1)
         .single();
 
-      // 3. Fetch Sector Data (Checking Retail for this example)
-      let sectorData = null;
-      if (entityData?.industry_category === 'Retail / Consumer') {
-        const { data: retail } = await supabase
-          .from('retail_financials')
-          .select('*')
-          .eq('entity_name', selectedEntity)
-          .order('year', { ascending: true })
-          .limit(1)
-          .single();
-        sectorData = retail;
-      }
-
       // --- THE CALCULATION ENGINE LOGIC ---
-      // In a full production model, this would be a massive service file looping through 5-10 years.
-      // Here, we prove the architecture works by running Year 1 calculations.
-      
       let year1Rev = 0;
-      let wacc = macroData ? (macroData.risk_free_rate + (macroData.unleveraged_beta * macroData.market_risk_premium)) : 10.0; // Simplified WACC
+      let ebitda = 0;
+      let wacc = macroData ? (macroData.risk_free_rate + (macroData.unleveraged_beta * macroData.market_risk_premium)) : 10.0;
+      
+      const industry = entityData?.industry_category || '';
 
-      if (sectorData && entityData.industry_category === 'Retail / Consumer') {
-        const totalStores = sectorData.stores_open_start + sectorData.new_stores_added - sectorData.stores_closed;
-        const footfall = totalStores * sectorData.annual_footfall_per_store;
-        const conversions = footfall * (sectorData.conversion_rate_pct / 100);
-        year1Rev = conversions * sectorData.avg_transaction_value;
+      // ROUTING LOGIC: Determine which math to run based on the industry
+      if (industry.includes('Retail')) {
         
-        // Add E-Commerce
-        year1Rev = year1Rev * (1 + (sectorData.e_commerce_sales_pct / 100));
+        // --- RETAIL MATH (6RT) ---
+        const { data: retail } = await supabase.from('retail_financials').select('*').eq('entity_name', selectedEntity).order('year').limit(1).single();
+        if (retail) {
+          const totalStores = retail.stores_open_start + retail.new_stores_added - retail.stores_closed;
+          const footfall = totalStores * retail.annual_footfall_per_store;
+          const conversions = footfall * (retail.conversion_rate_pct / 100);
+          
+          year1Rev = conversions * retail.avg_transaction_value;
+          year1Rev = year1Rev * (1 + (retail.e_commerce_sales_pct / 100)); // Add E-commerce
+          
+          ebitda = year1Rev * ((100 - retail.cogs_pct - retail.inventory_shrinkage_pct) / 100) * 0.4; // Proxy operating margin
+        }
+        
+      } else if (industry.includes('Insurance') && !industry.includes('Reinsurance')) {
+        
+        // --- DIRECT INSURANCE MATH (2IN) ---
+        const { data: ins } = await supabase.from('insurance_financials').select('*').eq('entity_name', selectedEntity).order('year').limit(1).single();
+        if (ins) {
+          // Revenue is Net Written Premium (GWP minus Reinsurance Ceded)
+          year1Rev = ins.gross_written_premium * (1 - (ins.reinsurance_ceded_pct / 100));
+          
+          // Underwriting Profit = NWP * (1 - Combined Ratio)
+          const combinedRatio = (ins.loss_ratio_pct + ins.commission_rate_pct + ins.management_expense_ratio_pct) / 100;
+          ebitda = year1Rev * (1 - combinedRatio); 
+        }
+
+      } else if (industry.includes('Reinsurance')) {
+        
+        // --- REINSURANCE MATH (3REI) ---
+        const { data: reins } = await supabase.from('reinsurance_financials').select('*').eq('entity_name', selectedEntity).order('year').limit(1).single();
+        if (reins) {
+          // Revenue is Net Assumed Premium (Assumed minus Retrocession)
+          year1Rev = reins.assumed_premium * (1 - (reins.retrocession_pct / 100));
+          
+          // Underwriting Profit = NWP * (1 - Combined Ratio)
+          const combinedRatio = (reins.loss_ratio_pct + reins.commission_ratio_pct + reins.expense_ratio_pct) / 100;
+          ebitda = year1Rev * (1 - combinedRatio);
+        }
+
       } else {
-        // Fallback for non-retail for now
+        // Fallback for unconfigured sectors
         year1Rev = 5000000; 
+        ebitda = year1Rev * 0.25; 
       }
 
-      // Mocking the rest of the P&L for architectural demonstration
-      const ebitda = year1Rev * 0.25; 
+      // Safeguard against zero data
+      if (year1Rev === 0) throw new Error("No revenue drivers found for this entity. Please configure sector data.");
+
+      // Calculate NOPAT and Enterprise Value
       const taxRate = macroData ? (macroData.corporate_tax_rate / 100) : 0.30;
       const nopat = ebitda * (1 - taxRate);
       
-      // Simplified Enterprise Value (NOPAT / WACC) - Gordon Growth
-      const enterpriseValue = nopat / (wacc / 100);
+      // Prevent dividing by zero or negative WACC, and handle negative NOPAT smoothly
+      const safeWacc = wacc > 0 ? (wacc / 100) : 0.10; 
+      let enterpriseValue = nopat / safeWacc;
 
       // Set the final results to be displayed
       setResults({
@@ -110,13 +132,12 @@ export default function ValuationEngine() {
 
     } catch (err) {
       console.error('Calculation Error:', err);
-      setError('Failed to run valuation engine. Ensure data exists for this entity.');
+      setError(err.message || 'Failed to run valuation engine. Ensure sector data exists.');
     } finally {
       setLoading(false);
     }
   };
 
-  // Helper to format currency
   const formatCurrency = (val, curr) => {
     return new Intl.NumberFormat('en-US', { style: 'currency', currency: curr, maximumFractionDigits: 0 }).format(val);
   };
@@ -124,7 +145,6 @@ export default function ValuationEngine() {
   return (
     <div className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8 font-sans">
       
-      {/* Header */}
       <div className="mb-8 flex items-center justify-between border-b border-slate-200 pb-5">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
@@ -141,7 +161,6 @@ export default function ValuationEngine() {
         </div>
       )}
 
-      {/* Control Panel */}
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 mb-8 flex flex-col md:flex-row items-end gap-4">
         <div className="flex-1 w-full">
           <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Target Entity</label>
@@ -170,7 +189,6 @@ export default function ValuationEngine() {
         </button>
       </div>
 
-      {/* Output Dashboard */}
       {results && (
         <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
           <h2 className="text-xl font-bold text-[#002D72] mb-6 flex items-center gap-2">
@@ -178,13 +196,12 @@ export default function ValuationEngine() {
           </h2>
           
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-            {/* Metric Cards */}
             <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm border-l-4 border-l-blue-500">
               <p className="text-xs font-bold text-slate-500 uppercase mb-1">Projected Revenue</p>
               <p className="text-2xl font-black text-slate-900">{formatCurrency(results.revenue, results.currency)}</p>
             </div>
             <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm border-l-4 border-l-emerald-500">
-              <p className="text-xs font-bold text-slate-500 uppercase mb-1">Est. EBITDA</p>
+              <p className="text-xs font-bold text-slate-500 uppercase mb-1">Underwriting Profit (EBITDA)</p>
               <p className="text-2xl font-black text-slate-900">{formatCurrency(results.ebitda, results.currency)}</p>
             </div>
             <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm border-l-4 border-l-amber-500">
@@ -197,7 +214,6 @@ export default function ValuationEngine() {
             </div>
           </div>
 
-          {/* Master Valuation Card */}
           <div className="bg-gradient-to-br from-[#002D72] to-[#001a44] p-8 rounded-2xl shadow-xl text-white relative overflow-hidden border border-[#C5A059]/20">
             <div className="absolute top-0 right-0 p-8 opacity-10">
               <DollarSign size={120} />
@@ -210,7 +226,8 @@ export default function ValuationEngine() {
                 {formatCurrency(results.enterpriseValue, results.currency)}
               </p>
               <p className="text-sm text-blue-300 mt-4 max-w-2xl">
-                Calculated using perpetuity growth method based on Year 1 NOPAT and blended WACC. Debt and cash adjustments required for final Equity Value.
+                Calculated using perpetuity growth method based on Year 1 NOPAT and blended WACC. 
+                {results.ebitda < 0 ? " Warning: Negative underwriting profit implies a negative enterprise value under strict perpetuity math." : ""}
               </p>
             </div>
           </div>
