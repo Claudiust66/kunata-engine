@@ -1,63 +1,73 @@
 'use client';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useEffect, useRef, useCallback } from 'react';
-import { Building2, Landmark, LayoutDashboard, LogOut, Users, Receipt, Monitor, Banknote, Calculator, Settings, Store, LineChart } from 'lucide-react';
+import { useEffect, useRef, useCallback, useState } from 'react';
+import { 
+  Building2, Landmark, LayoutDashboard, LogOut, Users, Receipt, 
+  Monitor, Banknote, Calculator, Settings, Store, LineChart, 
+  ChevronDown, ChevronRight, Wallet 
+} from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient'; 
 
 export default function DashboardLayout({ children }) {
   const pathname = usePathname();
   const router = useRouter();
 
-  // 1. Reference to hold our active timer
+  // 1. State to track which accordion menus are expanded
+  const [openMenus, setOpenMenus] = useState({
+    'Revenue & Direct Costs': true // Default open so users see the new structure
+  });
+
+  const toggleMenu = (menuName) => {
+    setOpenMenus(prev => ({ ...prev, [menuName]: !prev[menuName] }));
+  };
+
+  // 2. Idle Timeout Logic (Kept exactly as we built it)
   const timeoutRef = useRef(null);
 
-  // 2. Wrap logout in useCallback so it stays stable in memory
   const handleLogout = useCallback(async () => {
     console.log("Session timed out due to inactivity. Logging out...");
     await supabase.auth.signOut();
     router.push('/login');
   }, [router]);
 
-  // 3. The function that resets the 30-minute clock
   const resetTimer = useCallback(() => {
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    
-    // 30 minutes = 30 * 60 * 1000 = 1,800,000 milliseconds
     timeoutRef.current = setTimeout(() => {
       handleLogout();
-    }, 1800000); 
+    }, 1800000); // 30 minutes
   }, [handleLogout]);
 
-  // 4. Listen for user activity to trigger the reset
   useEffect(() => {
-    // Array of DOM events that indicate the user is actively using the app
     const activityEvents = ['mousedown', 'mousemove', 'keydown', 'scroll', 'touchstart'];
-    
-    const handleUserActivity = () => {
-      resetTimer();
-    };
-
-    // Attach the listeners to the entire document
+    const handleUserActivity = () => resetTimer();
     activityEvents.forEach(event => document.addEventListener(event, handleUserActivity));
-    
-    // Start the timer when the dashboard first loads
     resetTimer();
 
-    // Cleanup phase: remove listeners if the user leaves the dashboard
     return () => {
       activityEvents.forEach(event => document.removeEventListener(event, handleUserActivity));
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
     };
   }, [resetTimer]);
 
-  // Your Master Navigation Menu
+  // 3. Upgraded Navigation Menu with Sub-Item Support
   const navItems = [
     { name: 'Dashboard Overview', href: '/dashboard', icon: LayoutDashboard },
     { name: 'Valuation Engine', href: '/dashboard/valuation', icon: LineChart },
     { name: 'Entity Config (DetE)', href: '/dashboard/entity', icon: Building2 },
-    { name: 'Banking Sector (1BK)', href: '/dashboard/banking', icon: Landmark },
-    { name: 'Retail Sector (6RT)', href: '/dashboard/retail', icon: Store },
+    
+    // THE NEW GROUPED MENU
+    { 
+      name: 'Revenue & Direct Costs', 
+      icon: Wallet,
+      subItems: [
+        { name: 'Banking Sector (1BK)', href: '/dashboard/banking', icon: Landmark },
+        { name: 'Retail Sector (6RT)', href: '/dashboard/retail', icon: Store },
+        // Reinsurance placeholder ready to be uncommented when built!
+        // { name: 'Reinsurance (3REI)', href: '/dashboard/reinsurance', icon: Shield }, 
+      ]
+    },
+
     { name: 'Payroll Costs (CPAY)', href: '/dashboard/payroll', icon: Users },
     { name: 'General Expenses (CEXP)', href: '/dashboard/expenses', icon: Receipt },
     { name: 'Fixed Assets (CFAS)', href: '/dashboard/assets', icon: Monitor },
@@ -78,8 +88,56 @@ export default function DashboardLayout({ children }) {
         <nav className="flex-1 px-3 py-6 space-y-1 overflow-y-auto">
           {navItems.map((item) => {
             const Icon = item.icon;
-            const isActive = pathname === item.href; 
             
+            // Check if this item is a Parent with SubItems
+            if (item.subItems) {
+              const isOpen = openMenus[item.name];
+              const isChildActive = item.subItems.some(sub => pathname === sub.href);
+
+              return (
+                <div key={item.name} className="space-y-1 mb-2">
+                  <button 
+                    onClick={() => toggleMenu(item.name)}
+                    className={`w-full flex items-center justify-between px-4 py-3 rounded-lg transition-all duration-200 ${
+                      isChildActive && !isOpen ? 'bg-white/5 text-white font-bold' : 'text-slate-300 hover:bg-white/10 hover:text-white font-medium'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <Icon size={20} className={isChildActive ? 'text-white' : 'text-slate-400'} />
+                      {item.name}
+                    </div>
+                    {isOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                  </button>
+                  
+                  {/* Render SubItems if expanded */}
+                  {isOpen && (
+                    <div className="pl-11 pr-2 py-1 space-y-1 animate-in fade-in slide-in-from-top-1 duration-200">
+                      {item.subItems.map(sub => {
+                        const SubIcon = sub.icon;
+                        const isSubActive = pathname === sub.href;
+                        return (
+                          <Link 
+                            key={sub.name}
+                            href={sub.href}
+                            className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-200 text-sm ${
+                              isSubActive 
+                                ? 'bg-[#C5A059] text-white font-bold shadow-md' 
+                                : 'text-slate-400 hover:bg-white/10 hover:text-white font-medium'
+                            }`}
+                          >
+                            <SubIcon size={16} className={isSubActive ? 'text-white' : 'text-slate-500'} />
+                            {sub.name}
+                          </Link>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            }
+
+            // Normal standalone menu items
+            const isActive = pathname === item.href; 
             return (
               <Link 
                 key={item.name} 
