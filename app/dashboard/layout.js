@@ -5,7 +5,7 @@ import { useEffect, useRef, useCallback, useState } from 'react';
 import { 
   Building2, Landmark, LayoutDashboard, LogOut, Users, Receipt, 
   Monitor, Banknote, Calculator, Settings, Store, LineChart, 
-  ChevronDown, ChevronRight, Wallet 
+  ChevronDown, ChevronRight, Wallet, Briefcase 
 } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient'; 
 
@@ -15,14 +15,15 @@ export default function DashboardLayout({ children }) {
 
   // 1. State to track which accordion menus are expanded
   const [openMenus, setOpenMenus] = useState({
-    'Revenue & Direct Costs': true // Default open so users see the new structure
+    'Revenue & Direct Costs': true,
+    'Core Financials': true
   });
 
   const toggleMenu = (menuName) => {
     setOpenMenus(prev => ({ ...prev, [menuName]: !prev[menuName] }));
   };
 
-  // 2. Idle Timeout Logic (Kept exactly as we built it)
+  // 2. Idle Timeout Logic 
   const timeoutRef = useRef(null);
 
   const handleLogout = useCallback(async () => {
@@ -50,29 +51,35 @@ export default function DashboardLayout({ children }) {
     };
   }, [resetTimer]);
 
-  // 3. Upgraded Navigation Menu with Sub-Item Support
+  // 3. The Fully Grouped Navigation Menu
   const navItems = [
     { name: 'Dashboard Overview', href: '/dashboard', icon: LayoutDashboard },
     { name: 'Valuation Engine', href: '/dashboard/valuation', icon: LineChart },
     { name: 'Entity Config (DetE)', href: '/dashboard/entity', icon: Building2 },
     
-    // THE NEW GROUPED MENU
+    // GROUP 1: REVENUE MODULES
     { 
       name: 'Revenue & Direct Costs', 
       icon: Wallet,
       subItems: [
         { name: 'Banking Sector (1BK)', href: '/dashboard/banking', icon: Landmark },
         { name: 'Retail Sector (6RT)', href: '/dashboard/retail', icon: Store },
-        // Reinsurance placeholder ready to be uncommented when built!
         // { name: 'Reinsurance (3REI)', href: '/dashboard/reinsurance', icon: Shield }, 
       ]
     },
 
-    { name: 'Payroll Costs (CPAY)', href: '/dashboard/payroll', icon: Users },
-    { name: 'General Expenses (CEXP)', href: '/dashboard/expenses', icon: Receipt },
-    { name: 'Fixed Assets (CFAS)', href: '/dashboard/assets', icon: Monitor },
-    { name: 'Capital & Finance (CCAP)', href: '/dashboard/capital', icon: Banknote },
-    { name: 'Tax & Valuation (WACC)', href: '/dashboard/tax-wacc', icon: Calculator },
+    // GROUP 2: CORE FINANCIALS
+    {
+      name: 'Core Financials',
+      icon: Briefcase,
+      subItems: [
+        { name: 'Payroll Costs (CPAY)', href: '/dashboard/payroll', icon: Users },
+        { name: 'General Expenses (CEXP)', href: '/dashboard/expenses', icon: Receipt },
+        { name: 'Fixed Assets (CFAS)', href: '/dashboard/assets', icon: Monitor },
+        { name: 'Capital & Finance (CCAP)', href: '/dashboard/capital', icon: Banknote },
+        { name: 'Tax & Valuation (WACC)', href: '/dashboard/tax-wacc', icon: Calculator },
+      ]
+    }
   ];
 
   return (
@@ -85,11 +92,11 @@ export default function DashboardLayout({ children }) {
           <p className="text-xs text-slate-300 mt-1 uppercase tracking-wider font-semibold">Engine UI</p>
         </div>
         
-        <nav className="flex-1 px-3 py-6 space-y-1 overflow-y-auto">
+        <nav className="flex-1 px-3 py-6 space-y-1 overflow-y-auto custom-scrollbar">
           {navItems.map((item) => {
             const Icon = item.icon;
             
-            // Check if this item is a Parent with SubItems
+            // Render Grouped Items
             if (item.subItems) {
               const isOpen = openMenus[item.name];
               const isChildActive = item.subItems.some(sub => pathname === sub.href);
@@ -109,7 +116,6 @@ export default function DashboardLayout({ children }) {
                     {isOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
                   </button>
                   
-                  {/* Render SubItems if expanded */}
                   {isOpen && (
                     <div className="pl-11 pr-2 py-1 space-y-1 animate-in fade-in slide-in-from-top-1 duration-200">
                       {item.subItems.map(sub => {
@@ -136,7 +142,7 @@ export default function DashboardLayout({ children }) {
               );
             }
 
-            // Normal standalone menu items
+            // Render Standalone Items
             const isActive = pathname === item.href; 
             return (
               <Link 
