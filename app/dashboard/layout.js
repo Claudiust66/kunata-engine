@@ -5,7 +5,7 @@ import { useEffect, useRef, useCallback, useState } from 'react';
 import { 
   Building2, Landmark, LayoutDashboard, LogOut, Users, Receipt, 
   Monitor, Banknote, Calculator, Settings, Store, LineChart, 
-  ChevronDown, ChevronRight, Wallet, Briefcase, Shield, Umbrella 
+  ChevronDown, ChevronRight, Wallet, Briefcase, Shield, Umbrella, Factory 
 } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient'; 
 
@@ -63,9 +63,10 @@ export default function DashboardLayout({ children }) {
       icon: Wallet,
       subItems: [
         { name: 'Banking Sector (1BK)', href: '/dashboard/banking', icon: Landmark },
+        { name: 'Manufacturing (5MF)', href: '/dashboard/manufacturing', icon: Factory }, // <-- Added!
         { name: 'Retail Sector (6RT)', href: '/dashboard/retail', icon: Store },
         { name: 'Insurance Sector (2IN)', href: '/dashboard/insurance', icon: Shield },
-        { name: 'Reinsurance (3REI)', href: '/dashboard/reinsurance', icon: Umbrella }, // <-- Added Reinsurance!
+        { name: 'Reinsurance (3REI)', href: '/dashboard/reinsurance', icon: Umbrella },
       ]
     },
 
