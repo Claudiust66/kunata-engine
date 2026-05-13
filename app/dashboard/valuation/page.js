@@ -333,4 +333,24 @@ export default function ValuationEngine() {
                   </tr>
                   <tr className="hover:bg-slate-50 transition-colors">
                     <td className="px-6 py-4 font-bold text-slate-800">Net Operating Profit (NOPAT)</td>
-                    {results.projections.map(p => <td key={`nopat-${p.year}`} className="px-6 py-
+                    {results.projections.map(p => <td key={`nopat-${p.year}`} className="px-6 py-4 text-right font-medium">{formatCurrency(p.nopat, results.currency)}</td>)}
+                  </tr>
+                  <tr className="hover:bg-slate-50 transition-colors bg-blue-50/50">
+                    <td className="px-6 py-4 font-bold text-[#002D72]">Free Cash Flow (FCF)</td>
+                    {results.projections.map(p => <td key={`fcf-${p.year}`} className="px-6 py-4 text-right font-bold text-[#002D72]">{formatCurrency(p.fcf, results.currency)}</td>)}
+                  </tr>
+                  <tr className="hover:bg-slate-50 transition-colors">
+                    <td className="px-6 py-4 font-bold text-emerald-600">Present Value of FCF</td>
+                    {results.projections.map(p => <td key={`pv-${p.year}`} className="px-6 py-4 text-right font-bold text-emerald-600">{formatCurrency(p.pvFcf, results.currency)}</td>)}
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+        </div>
+      )}
+
+    </div>
+  );
+}
