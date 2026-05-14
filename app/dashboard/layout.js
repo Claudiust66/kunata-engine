@@ -55,21 +55,21 @@ export default function DashboardLayout({ children }) {
   const navItems = [
     { name: 'Dashboard Overview', href: '/dashboard', icon: LayoutDashboard },
     { name: 'Valuation Engine', href: '/dashboard/valuation', icon: LineChart },
-    { name: 'Entity Config (DetE)', href: '/dashboard/entity', icon: Building2 },
+    { name: 'Entity Config', href: '/dashboard/entity', icon: Building2 },
     
     // GROUP 1: REVENUE MODULES
     { 
       name: 'Revenue & Direct Costs', 
       icon: Wallet,
       subItems: [
-        { name: 'Banking Sector (1BK)', href: '/dashboard/banking', icon: Landmark },
-        { name: 'Insurance Sector (2IN)', href: '/dashboard/insurance', icon: Shield },
-        { name: 'Reinsurance (3REI)', href: '/dashboard/reinsurance', icon: Umbrella },
-        { name: 'Hotel & Hospitality (4HT)', href: '/dashboard/hotel', icon: BedDouble },
-        { name: 'Manufacturing (5MF)', href: '/dashboard/manufacturing', icon: Factory },
-        { name: 'Retail Sector (6RT)', href: '/dashboard/retail', icon: Store },
-        { name: 'Services Sector (7SV)', href: '/dashboard/services', icon: Users }, // <-- Added
-        { name: 'Hybrid Sector (8HB)', href: '/dashboard/hybrid', icon: Layers }, // <-- Added
+        { name: 'Banking Sector', href: '/dashboard/banking', icon: Landmark },
+        { name: 'Insurance Sector', href: '/dashboard/insurance', icon: Shield },
+        { name: 'Reinsurance', href: '/dashboard/reinsurance', icon: Umbrella },
+        { name: 'Hotel & Hospitality', href: '/dashboard/hotel', icon: BedDouble },
+        { name: 'Manufacturing', href: '/dashboard/manufacturing', icon: Factory },
+        { name: 'Retail Sector', href: '/dashboard/retail', icon: Store },
+        { name: 'Services Sector', href: '/dashboard/services', icon: Users }, // <-- Added
+        { name: 'Hybrid Sector', href: '/dashboard/hybrid', icon: Layers }, // <-- Added
       ]
     },
 
