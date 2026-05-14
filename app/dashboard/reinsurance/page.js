@@ -1,7 +1,7 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabaseClient'; 
-import { Umbrella, Save, Activity, AlertCircle, FileText, TrendingDown, Shield } from 'lucide-react';
+import { Umbrella, Save, Activity, AlertCircle, FileText, TrendingDown, Shield, Building2 } from 'lucide-react';
 
 export default function ReinsuranceDetailsForm() {
   const [loading, setLoading] = useState(false);
@@ -9,6 +9,7 @@ export default function ReinsuranceDetailsForm() {
   const [error, setError] = useState('');
   
   const [activeTab, setActiveTab] = useState('premiums');
+  const [entities, setEntities] = useState([]);
 
   const [formData, setFormData] = useState({
     entityName: '',
@@ -24,6 +25,15 @@ export default function ReinsuranceDetailsForm() {
     uprMarginPct: 35.0
   });
 
+  // Fetch entities for the dropdown so the user can't make a typo
+  useEffect(() => {
+    const fetchEntities = async () => {
+      const { data } = await supabase.from('entities').select('entity_name').order('entity_name');
+      if (data) setEntities(data);
+    };
+    fetchEntities();
+  }, []);
+
   const handleSave = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -31,7 +41,7 @@ export default function ReinsuranceDetailsForm() {
     setError('');
 
     if (!formData.entityName) {
-      setError('Please provide an Entity Name.');
+      setError('Please select an Entity.');
       setLoading(false);
       return;
     }
@@ -100,11 +110,25 @@ export default function ReinsuranceDetailsForm() {
       {/* Global Context Card */}
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 mb-8">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          
+          {/* THE NEW FOOLPROOF DROPDOWN */}
           <div>
-            <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Entity Name</label>
-            <input type="text" className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-[#002D72] font-medium" 
-              value={formData.entityName} onChange={e => setFormData({...formData, entityName: e.target.value})} placeholder="e.g. Pennarth Greene Re" />
+            <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Target Entity</label>
+            <div className="relative">
+              <Building2 size={18} className="absolute left-3 top-3 text-slate-400" />
+              <select 
+                className="w-full pl-10 p-2.5 bg-slate-50 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-[#002D72] font-medium"
+                value={formData.entityName}
+                onChange={e => setFormData({...formData, entityName: e.target.value})}
+              >
+                <option value="" disabled>Select an entity...</option>
+                {entities.map(ent => (
+                  <option key={ent.entity_name} value={ent.entity_name}>{ent.entity_name}</option>
+                ))}
+              </select>
+            </div>
           </div>
+
           <div>
             <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Financial Year</label>
             <input type="number" className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-[#002D72]" 
@@ -136,13 +160,11 @@ export default function ReinsuranceDetailsForm() {
               <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Assumed Premium</label>
               <input type="number" step="0.01" className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-[#002D72]" 
                 value={formData.assumedPremium} onChange={e => setFormData({...formData, assumedPremium: parseFloat(e.target.value)})} />
-              <p className="text-xs text-slate-400 mt-1">Premiums taken on from primary insurers.</p>
             </div>
             <div>
               <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Retrocession (%)</label>
               <input type="number" step="0.1" className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-[#002D72]" 
                 value={formData.retrocessionPct} onChange={e => setFormData({...formData, retrocessionPct: parseFloat(e.target.value)})} />
-              <p className="text-xs text-slate-400 mt-1">Percentage of Assumed Premium passed to other reinsurers.</p>
             </div>
           </div>
         )}
@@ -165,17 +187,6 @@ export default function ReinsuranceDetailsForm() {
               <input type="number" step="0.1" className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-[#002D72]" 
                 value={formData.expenseRatioPct} onChange={e => setFormData({...formData, expenseRatioPct: parseFloat(e.target.value)})} />
             </div>
-            
-            {/* Real-time Combined Ratio indicator */}
-            <div className="md:col-span-3 mt-4 p-4 rounded-lg bg-slate-50 border border-slate-200 flex items-center justify-between">
-              <div>
-                <p className="text-sm font-bold text-slate-700">Implied Combined Ratio</p>
-                <p className="text-xs text-slate-500">Should ideally be below 100% for underwriting profitability.</p>
-              </div>
-              <div className={`text-xl font-black ${(formData.lossRatioPct + formData.commissionRatioPct + formData.expenseRatioPct) < 100 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                {(formData.lossRatioPct + formData.commissionRatioPct + formData.expenseRatioPct).toFixed(1)}%
-              </div>
-            </div>
           </div>
         )}
 
@@ -186,7 +197,6 @@ export default function ReinsuranceDetailsForm() {
               <label className="block text-xs font-bold text-slate-500 uppercase mb-2">UPR Margin (%)</label>
               <input type="number" step="0.1" className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-[#002D72]" 
                 value={formData.uprMarginPct} onChange={e => setFormData({...formData, uprMarginPct: parseFloat(e.target.value)})} />
-              <p className="text-xs text-slate-400 mt-1">Unearned Premium Reserve relative to assumed premium.</p>
             </div>
           </div>
         )}
