@@ -78,11 +78,11 @@ export default function DashboardLayout({ children }) {
       name: 'Core Financials',
       icon: Briefcase,
       subItems: [
-        { name: 'Payroll Costs (CPAY)', href: '/dashboard/payroll', icon: Users },
-        { name: 'General Expenses (CEXP)', href: '/dashboard/expenses', icon: Receipt },
-        { name: 'Fixed Assets (CFAS)', href: '/dashboard/assets', icon: Monitor },
-        { name: 'Capital & Finance (CCAP)', href: '/dashboard/capital', icon: Banknote },
-        { name: 'Tax & Valuation (WACC)', href: '/dashboard/tax-wacc', icon: Calculator },
+        { name: 'Payroll Costs', href: '/dashboard/payroll', icon: Users },
+        { name: 'General Expenses', href: '/dashboard/expenses', icon: Receipt },
+        { name: 'Fixed Assets', href: '/dashboard/assets', icon: Monitor },
+        { name: 'Capital & Finance', href: '/dashboard/capital', icon: Banknote },
+        { name: 'Tax & Valuation', href: '/dashboard/tax-wacc', icon: Calculator },
       ]
     }
   ];
