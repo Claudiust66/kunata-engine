@@ -1,31 +1,40 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabaseClient'; 
-import { BedDouble, Save, Activity, AlertCircle, Coffee, DollarSign, Calculator } from 'lucide-react';
+import { BedDouble, Save, Activity, AlertCircle, Building2, Calendar, DollarSign, Percent } from 'lucide-react';
 
 export default function HotelDetailsForm() {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState('');
   
-  const [activeTab, setActiveTab] = useState('rooms');
+  const [entities, setEntities] = useState([]);
 
   const [formData, setFormData] = useState({
     entityName: '',
     year: 2026,
-    // Room Metrics
-    totalRooms: 250,
+    // Operations
+    totalRooms: 150,
     operatingDays: 365,
-    occupancyRatePct: 72.5,
-    averageDailyRate: 185.00,
+    occupancyRatePct: 75.0,
+    averageDailyRate: 250.0,
     // Ancillary Revenue
-    fbRevenuePctOfRooms: 35.0,
+    fbRevenuePctOfRooms: 30.0,
     otherRevenuePctOfRooms: 10.0,
-    // Operating Costs
+    // Expenses
     roomExpensePct: 25.0,
-    fbExpensePct: 65.0,
+    fbExpensePct: 70.0,
     undistributedOpexPct: 15.0
   });
+
+  // Fetch entities for the dropdown so the user can't make a typo
+  useEffect(() => {
+    const fetchEntities = async () => {
+      const { data } = await supabase.from('entities').select('entity_name').order('entity_name');
+      if (data) setEntities(data);
+    };
+    fetchEntities();
+  }, []);
 
   const handleSave = async (e) => {
     e.preventDefault();
@@ -34,7 +43,7 @@ export default function HotelDetailsForm() {
     setError('');
 
     if (!formData.entityName) {
-      setError('Please provide an Entity Name.');
+      setError('Please select an Entity.');
       setLoading(false);
       return;
     }
@@ -42,7 +51,7 @@ export default function HotelDetailsForm() {
     try {
       const { error: insertError } = await supabase
         .from('hotel_financials')
-        .insert([{
+        .upsert([{
           entity_name: formData.entityName,
           year: formData.year,
           total_rooms: formData.totalRooms,
@@ -54,7 +63,7 @@ export default function HotelDetailsForm() {
           room_expense_pct: formData.roomExpensePct,
           fb_expense_pct: formData.fbExpensePct,
           undistributed_opex_pct: formData.undistributedOpexPct
-        }]);
+        }], { onConflict: 'entity_name, year' }); // Added upsert to prevent multiple rows!
 
       if (insertError) throw insertError;
 
@@ -63,7 +72,7 @@ export default function HotelDetailsForm() {
 
     } catch (err) {
       console.error('Error saving hotel data:', err);
-      setError(err.message || 'Failed to save hospitality configuration.');
+      setError(err.message || 'Failed to save hotel configuration.');
     } finally {
       setLoading(false);
     }
@@ -77,9 +86,9 @@ export default function HotelDetailsForm() {
         <div>
           <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
             <BedDouble className="text-[#002D72]" />
-            Hotel & Hospitality (4HT)
+            Hotel & Hospitality
           </h1>
-          <p className="text-slate-500 mt-1 text-sm">Manage room inventory, RevPAR drivers, and operating expenses.</p>
+          <p className="text-slate-500 mt-1 text-sm">Manage room inventory, ADR, occupancy, and departmental expenses.</p>
         </div>
         <button 
           onClick={handleSave}
@@ -99,47 +108,50 @@ export default function HotelDetailsForm() {
 
       {success && (
         <div className="mb-6 bg-emerald-50 border border-emerald-200 text-emerald-700 px-4 py-3 rounded-lg flex items-center gap-2 text-sm font-bold">
-          Hospitality configuration saved securely!
+          Hotel configuration saved securely!
         </div>
       )}
 
       {/* Global Context Card */}
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 mb-8">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* THE FOOLPROOF DROPDOWN */}
           <div>
-            <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Entity Name</label>
-            <input type="text" className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-[#002D72] font-medium" 
-              value={formData.entityName} onChange={e => setFormData({...formData, entityName: e.target.value})} placeholder="e.g. Pennarth Greene Grand Hotel" />
+            <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Target Entity</label>
+            <div className="relative">
+              <Building2 size={18} className="absolute left-3 top-3 text-slate-400" />
+              <select 
+                className="w-full pl-10 p-2.5 bg-slate-50 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-[#002D72] font-medium"
+                value={formData.entityName}
+                onChange={e => setFormData({...formData, entityName: e.target.value})}
+              >
+                <option value="" disabled>Select an entity...</option>
+                {entities.map(ent => (
+                  <option key={ent.entity_name} value={ent.entity_name}>{ent.entity_name}</option>
+                ))}
+              </select>
+            </div>
           </div>
+
           <div>
             <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Financial Year</label>
-            <input type="number" className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-[#002D72]" 
-              value={formData.year} onChange={e => setFormData({...formData, year: parseInt(e.target.value)})} />
+            <div className="relative">
+              <Calendar size={18} className="absolute left-3 top-3 text-slate-400" />
+              <input type="number" className="w-full pl-10 p-2.5 bg-slate-50 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-[#002D72]" 
+                value={formData.year} onChange={e => setFormData({...formData, year: parseInt(e.target.value)})} />
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Tab Navigation */}
-      <div className="flex space-x-1 border-b border-slate-200 mb-6 overflow-x-auto">
-        <button onClick={() => setActiveTab('rooms')} className={`px-5 py-3 text-sm font-bold rounded-t-lg flex items-center gap-2 transition-colors whitespace-nowrap ${activeTab === 'rooms' ? 'bg-[#002D72] text-white' : 'bg-slate-50 text-slate-500 hover:bg-slate-100 border border-transparent hover:border-slate-200'}`}>
-          <BedDouble size={16} /> Room Metrics
-        </button>
-        <button onClick={() => setActiveTab('ancillary')} className={`px-5 py-3 text-sm font-bold rounded-t-lg flex items-center gap-2 transition-colors whitespace-nowrap ${activeTab === 'ancillary' ? 'bg-[#002D72] text-white' : 'bg-slate-50 text-slate-500 hover:bg-slate-100 border border-transparent hover:border-slate-200'}`}>
-          <Coffee size={16} /> F&B and Ancillary
-        </button>
-        <button onClick={() => setActiveTab('expenses')} className={`px-5 py-3 text-sm font-bold rounded-t-lg flex items-center gap-2 transition-colors whitespace-nowrap ${activeTab === 'expenses' ? 'bg-[#002D72] text-white' : 'bg-slate-50 text-slate-500 hover:bg-slate-100 border border-transparent hover:border-slate-200'}`}>
-          <DollarSign size={16} /> Operating Costs
-        </button>
-      </div>
-
-      {/* Tab Content Areas */}
-      <div className="bg-white rounded-b-xl rounded-tr-xl shadow-sm border border-slate-200 p-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         
-        {/* TAB 1: ROOM METRICS */}
-        {activeTab === 'rooms' && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-in fade-in duration-300">
+        {/* Core Operations Card */}
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+          <h2 className="text-lg font-bold text-[#002D72] mb-4 border-b border-slate-100 pb-2">Core Operations</h2>
+          <div className="space-y-4">
             <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Total Rooms Available</label>
+              <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Total Rooms</label>
               <input type="number" className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-[#002D72]" 
                 value={formData.totalRooms} onChange={e => setFormData({...formData, totalRooms: parseInt(e.target.value)})} />
             </div>
@@ -148,69 +160,65 @@ export default function HotelDetailsForm() {
               <input type="number" className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-[#002D72]" 
                 value={formData.operatingDays} onChange={e => setFormData({...formData, operatingDays: parseInt(e.target.value)})} />
             </div>
-            <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Average Occupancy Rate (%)</label>
-              <input type="number" step="0.1" className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-[#002D72]" 
-                value={formData.occupancyRatePct} onChange={e => setFormData({...formData, occupancyRatePct: parseFloat(e.target.value)})} />
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Occupancy (%)</label>
+                <div className="relative">
+                  <Percent size={14} className="absolute right-3 top-3 text-slate-400" />
+                  <input type="number" step="0.1" className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-[#002D72]" 
+                    value={formData.occupancyRatePct} onChange={e => setFormData({...formData, occupancyRatePct: parseFloat(e.target.value)})} />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-2">ADR ($)</label>
+                <div className="relative">
+                  <DollarSign size={14} className="absolute left-3 top-3 text-slate-400" />
+                  <input type="number" step="0.01" className="w-full pl-8 p-2.5 bg-slate-50 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-[#002D72]" 
+                    value={formData.averageDailyRate} onChange={e => setFormData({...formData, averageDailyRate: parseFloat(e.target.value)})} />
+                </div>
+              </div>
             </div>
-            <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Average Daily Rate (ADR)</label>
-              <input type="number" step="0.01" className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-[#002D72]" 
-                value={formData.averageDailyRate} onChange={e => setFormData({...formData, averageDailyRate: parseFloat(e.target.value)})} />
+          </div>
+        </div>
+
+        {/* Ancillary & Expenses Card */}
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+          <h2 className="text-lg font-bold text-[#002D72] mb-4 border-b border-slate-100 pb-2">Ancillary & Expenses</h2>
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-2">F&B Rev (% of Rooms)</label>
+                <input type="number" step="0.1" className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-[#002D72]" 
+                  value={formData.fbRevenuePctOfRooms} onChange={e => setFormData({...formData, fbRevenuePctOfRooms: parseFloat(e.target.value)})} />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Other Rev (% of Rooms)</label>
+                <input type="number" step="0.1" className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-[#002D72]" 
+                  value={formData.otherRevenuePctOfRooms} onChange={e => setFormData({...formData, otherRevenuePctOfRooms: parseFloat(e.target.value)})} />
+              </div>
             </div>
             
-            {/* Real-time RevPAR Indicator */}
-            <div className="md:col-span-2 mt-4 p-4 rounded-lg bg-[#002D72]/5 border border-[#002D72]/20 flex items-center justify-between">
+            <hr className="border-slate-100 my-4" />
+            
+            <div className="grid grid-cols-3 gap-4">
               <div>
-                <p className="text-sm font-bold text-[#002D72] flex items-center gap-2"><Calculator size={16}/> Implied RevPAR</p>
-                <p className="text-xs text-slate-500">Revenue Per Available Room (ADR × Occupancy)</p>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Room Exp. (%)</label>
+                <input type="number" step="0.1" className="w-full p-2.5 bg-rose-50 border border-rose-200 rounded-lg outline-none focus:ring-2 focus:ring-rose-500" 
+                  value={formData.roomExpensePct} onChange={e => setFormData({...formData, roomExpensePct: parseFloat(e.target.value)})} />
               </div>
-              <div className="text-xl font-black text-[#002D72]">
-                ${(formData.averageDailyRate * (formData.occupancyRatePct / 100)).toFixed(2)}
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-2">F&B Exp. (%)</label>
+                <input type="number" step="0.1" className="w-full p-2.5 bg-rose-50 border border-rose-200 rounded-lg outline-none focus:ring-2 focus:ring-rose-500" 
+                  value={formData.fbExpensePct} onChange={e => setFormData({...formData, fbExpensePct: parseFloat(e.target.value)})} />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Undist. Opex (%)</label>
+                <input type="number" step="0.1" className="w-full p-2.5 bg-rose-50 border border-rose-200 rounded-lg outline-none focus:ring-2 focus:ring-rose-500" 
+                  value={formData.undistributedOpexPct} onChange={e => setFormData({...formData, undistributedOpexPct: parseFloat(e.target.value)})} />
               </div>
             </div>
           </div>
-        )}
-
-        {/* TAB 2: ANCILLARY */}
-        {activeTab === 'ancillary' && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-in fade-in duration-300">
-            <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase mb-2">F&B Revenue (% of Room Revenue)</label>
-              <input type="number" step="0.1" className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-[#002D72]" 
-                value={formData.fbRevenuePctOfRooms} onChange={e => setFormData({...formData, fbRevenuePctOfRooms: parseFloat(e.target.value)})} />
-              <p className="text-xs text-slate-400 mt-1">Food, beverage, and catering income.</p>
-            </div>
-            <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Other Revenue (% of Room Revenue)</label>
-              <input type="number" step="0.1" className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-[#002D72]" 
-                value={formData.otherRevenuePctOfRooms} onChange={e => setFormData({...formData, otherRevenuePctOfRooms: parseFloat(e.target.value)})} />
-              <p className="text-xs text-slate-400 mt-1">Spa, parking, resort fees, and telecommunications.</p>
-            </div>
-          </div>
-        )}
-
-        {/* TAB 3: OPERATING COSTS */}
-        {activeTab === 'expenses' && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-in fade-in duration-300">
-            <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Room Dept Expenses (% of Room Rev)</label>
-              <input type="number" step="0.1" className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-[#002D72]" 
-                value={formData.roomExpensePct} onChange={e => setFormData({...formData, roomExpensePct: parseFloat(e.target.value)})} />
-            </div>
-            <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase mb-2">F&B Dept Expenses (% of F&B Rev)</label>
-              <input type="number" step="0.1" className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-[#002D72]" 
-                value={formData.fbExpensePct} onChange={e => setFormData({...formData, fbExpensePct: parseFloat(e.target.value)})} />
-            </div>
-            <div className="md:col-span-2">
-              <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Undistributed OpEx (% of Total Rev)</label>
-              <input type="number" step="0.1" className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-[#002D72]" 
-                value={formData.undistributedOpexPct} onChange={e => setFormData({...formData, undistributedOpexPct: parseFloat(e.target.value)})} />
-              <p className="text-xs text-slate-400 mt-1">Admin, marketing, maintenance, and utilities.</p>
-            </div>
-          </div>
-        )}
+        </div>
 
       </div>
     </div>

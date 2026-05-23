@@ -25,6 +25,13 @@ export default function ValuationEngine() {
     }
   };
 
+  // Safe Number Parser: aggressively strips commas and undefined values
+  const parseNum = (val) => {
+    if (val === null || val === undefined) return 0;
+    const parsed = Number(String(val).replace(/,/g, ''));
+    return isNaN(parsed) ? 0 : parsed;
+  };
+
   const fetchSectorData = async (tableName, entityName) => {
     const { data: exactData } = await supabase.from(tableName).select('*').eq('entity_name', entityName).order('year').limit(1);
     if (exactData && exactData.length > 0) return exactData[0];
@@ -60,58 +67,119 @@ export default function ValuationEngine() {
 
       let year1Rev = 0; let ebitda = 0;
       
-      // Armored WACC calculation
       let wacc = 10.0;
       if (macroData) {
-        const rf = Number(String(macroData.risk_free_rate || 0).replace(/,/g, '')) || 0;
-        const beta = Number(String(macroData.unleveraged_beta || 0).replace(/,/g, '')) || 0;
-        const mrp = Number(String(macroData.market_risk_premium || 0).replace(/,/g, '')) || 0;
-        wacc = rf + (beta * mrp);
+        wacc = parseNum(macroData.risk_free_rate) + (parseNum(macroData.unleveraged_beta) * parseNum(macroData.market_risk_premium));
       }
       if (isNaN(wacc) || wacc <= 0) wacc = 10.0;
 
       const industry = entityData?.industry_category || '';
+      console.log("Detected Industry:", industry);
 
-      if (industry.includes('Reinsurance')) {
+      // --- THE MASTER SECTOR ROUTER ---
+      
+      if (industry.includes('Banking') || industry.includes('Bank')) {
+        console.log("--> Routing to Banking Math");
+        const bank = await fetchSectorData('banking_financials', selectedEntity);
+        if (bank) {
+          const assets = parseNum(bank.interest_earning_assets);
+          const nim = parseNum(bank.net_interest_margin_pct);
+          const niiPct = parseNum(bank.non_interest_income_pct);
+          const efficiency = parseNum(bank.efficiency_ratio_pct);
+          const provision = parseNum(bank.provision_loss_pct);
+
+          const netInterestIncome = assets * (nim / 100);
+          const nonInterestIncome = assets * (niiPct / 100);
+          year1Rev = netInterestIncome + nonInterestIncome;
+
+          const nonInterestExpense = year1Rev * (efficiency / 100);
+          const provisionExpense = assets * (provision / 100);
+
+          ebitda = year1Rev - nonInterestExpense - provisionExpense;
+        }
+
+      } else if (industry.includes('Reinsurance')) {
         console.log("--> Routing to Reinsurance Math");
         const reins = await fetchSectorData('reinsurance_financials', selectedEntity);
-        
         if (reins) {
-          // EXTREME INLINE FAIL-SAFES
-          const rawPrem = reins.assumed_premium || 0;
-          const rawRetro = reins.retrocession_pct || 0;
-          const rawLoss = reins.loss_ratio_pct || 0;
-          const rawComm = reins.commission_ratio_pct || 0;
-          const rawExp = reins.expense_ratio_pct || 0;
-
-          console.log(`Raw Values from DB -> Prem: ${rawPrem}, Retro: ${rawRetro}, Loss: ${rawLoss}, Comm: ${rawComm}, Exp: ${rawExp}`);
-
-          const premium = Number(String(rawPrem).replace(/,/g, '')) || 0;
-          const retro = Number(String(rawRetro).replace(/,/g, '')) || 0;
-          const loss = Number(String(rawLoss).replace(/,/g, '')) || 0;
-          const comm = Number(String(rawComm).replace(/,/g, '')) || 0;
-          const exp = Number(String(rawExp).replace(/,/g, '')) || 0;
-
-          console.log(`Parsed Math Inputs -> Prem: ${premium}, Retro: ${retro}, Loss: ${loss}, Comm: ${comm}, Exp: ${exp}`);
+          const premium = parseNum(reins.assumed_premium);
+          const retro = parseNum(reins.retrocession_pct);
+          const loss = parseNum(reins.loss_ratio_pct);
+          const comm = parseNum(reins.commission_ratio_pct);
+          const exp = parseNum(reins.expense_ratio_pct);
 
           year1Rev = premium * (1 - (retro / 100)); 
           ebitda = year1Rev * (1 - ((loss + comm + exp) / 100));
         }
+
+      } else if (industry.includes('Insurance')) {
+        console.log("--> Routing to Insurance Math");
+        const ins = await fetchSectorData('insurance_financials', selectedEntity);
+        if (ins) {
+          year1Rev = parseNum(ins.gross_written_premium) * (1 - (parseNum(ins.reinsurance_ceded_pct) / 100)); 
+          ebitda = year1Rev * (1 - ((parseNum(ins.loss_ratio_pct) + parseNum(ins.commission_rate_pct) + parseNum(ins.management_expense_ratio_pct)) / 100)); 
+        }
+
+      } else if (industry.includes('Hotel') || industry.includes('Hospitality')) {
+        console.log("--> Routing to Hotel Math");
+        const ht = await fetchSectorData('hotel_financials', selectedEntity);
+        if (ht) {
+          const roomRev = (parseNum(ht.total_rooms) * parseNum(ht.operating_days) * (parseNum(ht.occupancy_rate_pct) / 100)) * parseNum(ht.average_daily_rate);
+          const fbRev = roomRev * (parseNum(ht.fb_revenue_pct_of_rooms) / 100);
+          const otherRev = roomRev * (parseNum(ht.other_revenue_pct_of_rooms) / 100);
+          
+          year1Rev = roomRev + fbRev + otherRev;
+          ebitda = year1Rev - ((roomRev * (parseNum(ht.room_expense_pct) / 100)) + (fbRev * (parseNum(ht.fb_expense_pct) / 100)) + (year1Rev * (parseNum(ht.undistributed_opex_pct) / 100)));
+        }
+
+      } else if (industry.includes('Retail')) {
+        console.log("--> Routing to Retail Math");
+        const retail = await fetchSectorData('retail_financials', selectedEntity);
+        if (retail) {
+          const totalStores = parseNum(retail.stores_open_start) + parseNum(retail.new_stores_added) - parseNum(retail.stores_closed);
+          const footfall = totalStores * parseNum(retail.annual_footfall_per_store);
+          year1Rev = (footfall * (parseNum(retail.conversion_rate_pct) / 100)) * parseNum(retail.avg_transaction_value) * (1 + (parseNum(retail.e_commerce_sales_pct) / 100)); 
+          ebitda = year1Rev * ((100 - parseNum(retail.cogs_pct) - parseNum(retail.inventory_shrinkage_pct)) / 100) * 0.4; 
+        }
+
+      } else if (industry.includes('Manufacturing')) {
+        console.log("--> Routing to Manufacturing Math");
+        const mf = await fetchSectorData('manufacturing_financials', selectedEntity);
+        if (mf) {
+          const soldUnits = (parseNum(mf.max_capacity_units) * (parseNum(mf.utilization_pct) / 100)) * (parseNum(mf.units_sold_pct) / 100);
+          year1Rev = soldUnits * parseNum(mf.average_selling_price);
+          ebitda = year1Rev - ((soldUnits * parseNum(mf.raw_material_per_unit)) + (soldUnits * parseNum(mf.direct_labor_per_unit)) + parseNum(mf.fixed_manufacturing_overhead));
+        }
+
+      } else if (industry.includes('Service') || industry.includes('Consulting')) {
+        console.log("--> Routing to Service Math");
+        const sv = await fetchSectorData('services_financials', selectedEntity);
+        if (sv) {
+          year1Rev = (parseNum(sv.total_billable_staff) * parseNum(sv.target_billable_hours) * (parseNum(sv.utilization_pct) / 100)) * parseNum(sv.avg_hourly_rate);
+          ebitda = year1Rev - (year1Rev * (parseNum(sv.direct_labor_cost_pct) / 100)); 
+        }
+
+      } else if (industry.includes('Hybrid')) {
+        console.log("--> Routing to Hybrid Math");
+        const hb = await fetchSectorData('hybrid_financials', selectedEntity);
+        if (hb) {
+          year1Rev = parseNum(hb.recurring_revenue) + parseNum(hb.product_revenue) + parseNum(hb.service_revenue);
+          ebitda = year1Rev - ((parseNum(hb.recurring_revenue) * (parseNum(hb.recurring_cogs_pct) / 100)) + (parseNum(hb.product_revenue) * (parseNum(hb.product_cogs_pct) / 100)) + (parseNum(hb.service_revenue) * (parseNum(hb.service_cogs_pct) / 100)));
+        }
       } else {
-        // Fallback for any other industry just to prove the engine works
-        year1Rev = 5000000; ebitda = 1250000;
+        // Absolute fallback so the engine never crashes for an unknown entity
+        year1Rev = 5000000; ebitda = 1250000; 
       }
 
       console.log(`Final Engine Check -> Year 1 Rev: ${year1Rev}, EBITDA: ${ebitda}`);
       
-      // Aggressive NaN stripping
       if (isNaN(year1Rev)) year1Rev = 0;
       if (isNaN(ebitda)) ebitda = 0;
 
       if (year1Rev === 0) throw new Error("No revenue drivers found for this entity. Please configure sector data.");
 
       // --- THE 5-YEAR DCF LOOP ---
-      const taxRate = macroData ? (Number(String(macroData.corporate_tax_rate || 30).replace(/,/g, '')) / 100) : 0.30;
+      const taxRate = macroData ? (parseNum(macroData.corporate_tax_rate) / 100) : 0.30;
       const safeWacc = wacc / 100; 
       const yoyGrowthRate = 0.05; 
       const terminalGrowthRate = 0.02; 
@@ -144,7 +212,7 @@ export default function ValuationEngine() {
 
     } catch (err) {
       console.error('Calculation Error:', err);
-      setError(err.message || 'Failed to run valuation engine.');
+      setError(err.message || 'Failed to run valuation engine. Ensure sector data exists.');
     } finally {
       setLoading(false);
     }
@@ -185,6 +253,7 @@ export default function ValuationEngine() {
               <div className="md:col-span-2">
                 <p className="text-sm font-bold text-blue-200 uppercase tracking-widest mb-2 flex items-center gap-2"><TrendingUp size={16} /> Implied Enterprise Value (DCF)</p>
                 <p className="text-5xl md:text-6xl font-black text-[#C5A059] tracking-tight">{formatCurrency(results.enterpriseValue, results.currency)}</p>
+                <p className="text-sm text-blue-300 mt-4 max-w-xl">Calculated using a 5-Year DCF. WACC is <strong>{results.wacc.toFixed(2)}%</strong> and Perpetual Growth Rate is <strong>2.0%</strong>.</p>
               </div>
               <div className="space-y-4 border-t md:border-t-0 md:border-l border-white/10 pt-4 md:pt-0 md:pl-8">
                 <div><p className="text-xs text-blue-300 uppercase tracking-wider font-bold">PV of 5-Yr Cash Flows</p><p className="text-xl font-bold text-white">{formatCurrency(results.cumulativePvFcf, results.currency)}</p></div>
