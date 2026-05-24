@@ -77,7 +77,7 @@ export default function ServicesDetailsForm() {
         <div>
           <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
             <Briefcase className="text-[#002D72]" />
-            Services & Consulting
+            Services Sector
           </h1>
           <p className="text-slate-500 mt-1 text-sm">Manage billable staff, utilization rates, and hourly billing.</p>
         </div>
