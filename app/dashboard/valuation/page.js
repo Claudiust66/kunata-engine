@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabaseClient'; 
-import { LineChart, Play, Activity, AlertCircle, DollarSign, TrendingUp, BarChart3, Building2 } from 'lucide-react';
+import { LineChart, Play, Activity, AlertCircle, DollarSign, TrendingUp, BarChart3, Building2, Scale, Landmark } from 'lucide-react';
 
 export default function ValuationEngine() {
   const [loading, setLoading] = useState(false);
@@ -25,7 +25,6 @@ export default function ValuationEngine() {
     }
   };
 
-  // Safe Number Parser: aggressively strips commas and undefined values
   const parseNum = (val) => {
     if (val === null || val === undefined) return 0;
     const parsed = Number(String(val).replace(/,/g, ''));
@@ -62,22 +61,41 @@ export default function ValuationEngine() {
       const { data: entArray } = await supabase.from('entities').select('*').eq('entity_name', selectedEntity).limit(1);
       const entityData = entArray && entArray.length > 0 ? entArray[0] : null;
 
-      const { data: macroArray } = await supabase.from('core_tax_wacc').select('*').eq('entity_name', selectedEntity).order('year').limit(1);
-      const macroData = macroArray && macroArray.length > 0 ? macroArray[0] : null;
+      // --- THE NEW WACC ENGINE (Glass Box) ---
+      const { data: capArray } = await supabase.from('capital_structure').select('*').eq('entity_name', selectedEntity).order('year').limit(1);
+      const capData = capArray && capArray.length > 0 ? capArray[0] : null;
 
-      let year1Rev = 0; let ebitda = 0;
-      
-      let wacc = 10.0;
-      if (macroData) {
-        wacc = parseNum(macroData.risk_free_rate) + (parseNum(macroData.unleveraged_beta) * parseNum(macroData.market_risk_premium));
+      let waccDetails = {
+        ke: 10.0, kd: 0, weightE: 1.0, weightD: 0, taxRate: 0.30, beta: 1.0, riskFree: 4.5, mrp: 5.5, interest: 0, finalWacc: 10.0
+      };
+
+      if (capData) {
+        const riskFree = parseNum(capData.risk_free_rate_pct);
+        const beta = parseNum(capData.beta);
+        const mrp = parseNum(capData.market_risk_premium_pct);
+        const interest = parseNum(capData.average_interest_rate_pct);
+        const taxRate = parseNum(capData.corporate_tax_rate_pct) / 100;
+        
+        const weightE = parseNum(capData.target_equity_mix_pct) / 100;
+        const weightD = parseNum(capData.target_debt_mix_pct) / 100;
+
+        // The True Math
+        const ke = riskFree + (beta * mrp); // CAPM
+        const kd = interest * (1 - taxRate); // After-tax Cost of Debt
+        const finalWacc = (ke * weightE) + (kd * weightD); // WACC
+
+        waccDetails = { 
+          ke, kd, weightE, weightD, taxRate, beta, riskFree, mrp, interest, 
+          finalWacc: finalWacc > 0 ? finalWacc : 10.0 
+        };
       }
-      if (isNaN(wacc) || wacc <= 0) wacc = 10.0;
-
+      
+      const wacc = waccDetails.finalWacc;
+      let year1Rev = 0; let ebitda = 0;
       const industry = entityData?.industry_category || '';
       console.log("Detected Industry:", industry);
 
       // --- THE MASTER SECTOR ROUTER ---
-      
       if (industry.includes('Banking') || industry.includes('Bank')) {
         console.log("--> Routing to Banking Math");
         const bank = await fetchSectorData('banking_financials', selectedEntity);
@@ -94,10 +112,8 @@ export default function ValuationEngine() {
 
           const nonInterestExpense = year1Rev * (efficiency / 100);
           const provisionExpense = assets * (provision / 100);
-
           ebitda = year1Rev - nonInterestExpense - provisionExpense;
         }
-
       } else if (industry.includes('Reinsurance')) {
         console.log("--> Routing to Reinsurance Math");
         const reins = await fetchSectorData('reinsurance_financials', selectedEntity);
@@ -111,7 +127,6 @@ export default function ValuationEngine() {
           year1Rev = premium * (1 - (retro / 100)); 
           ebitda = year1Rev * (1 - ((loss + comm + exp) / 100));
         }
-
       } else if (industry.includes('Insurance')) {
         console.log("--> Routing to Insurance Math");
         const ins = await fetchSectorData('insurance_financials', selectedEntity);
@@ -119,7 +134,6 @@ export default function ValuationEngine() {
           year1Rev = parseNum(ins.gross_written_premium) * (1 - (parseNum(ins.reinsurance_ceded_pct) / 100)); 
           ebitda = year1Rev * (1 - ((parseNum(ins.loss_ratio_pct) + parseNum(ins.commission_rate_pct) + parseNum(ins.management_expense_ratio_pct)) / 100)); 
         }
-
       } else if (industry.includes('Hotel') || industry.includes('Hospitality')) {
         console.log("--> Routing to Hotel Math");
         const ht = await fetchSectorData('hotel_financials', selectedEntity);
@@ -131,7 +145,6 @@ export default function ValuationEngine() {
           year1Rev = roomRev + fbRev + otherRev;
           ebitda = year1Rev - ((roomRev * (parseNum(ht.room_expense_pct) / 100)) + (fbRev * (parseNum(ht.fb_expense_pct) / 100)) + (year1Rev * (parseNum(ht.undistributed_opex_pct) / 100)));
         }
-
       } else if (industry.includes('Retail')) {
         console.log("--> Routing to Retail Math");
         const retail = await fetchSectorData('retail_financials', selectedEntity);
@@ -141,7 +154,6 @@ export default function ValuationEngine() {
           year1Rev = (footfall * (parseNum(retail.conversion_rate_pct) / 100)) * parseNum(retail.avg_transaction_value) * (1 + (parseNum(retail.e_commerce_sales_pct) / 100)); 
           ebitda = year1Rev * ((100 - parseNum(retail.cogs_pct) - parseNum(retail.inventory_shrinkage_pct)) / 100) * 0.4; 
         }
-
       } else if (industry.includes('Manufacturing')) {
         console.log("--> Routing to Manufacturing Math");
         const mf = await fetchSectorData('manufacturing_financials', selectedEntity);
@@ -150,7 +162,6 @@ export default function ValuationEngine() {
           year1Rev = soldUnits * parseNum(mf.average_selling_price);
           ebitda = year1Rev - ((soldUnits * parseNum(mf.raw_material_per_unit)) + (soldUnits * parseNum(mf.direct_labor_per_unit)) + parseNum(mf.fixed_manufacturing_overhead));
         }
-
       } else if (industry.includes('Service') || industry.includes('Consulting')) {
         console.log("--> Routing to Service Math");
         const sv = await fetchSectorData('services_financials', selectedEntity);
@@ -158,7 +169,6 @@ export default function ValuationEngine() {
           year1Rev = (parseNum(sv.total_billable_staff) * parseNum(sv.target_billable_hours) * (parseNum(sv.utilization_pct) / 100)) * parseNum(sv.avg_hourly_rate);
           ebitda = year1Rev - (year1Rev * (parseNum(sv.direct_labor_cost_pct) / 100)); 
         }
-
       } else if (industry.includes('Hybrid')) {
         console.log("--> Routing to Hybrid Math");
         const hb = await fetchSectorData('hybrid_financials', selectedEntity);
@@ -167,19 +177,16 @@ export default function ValuationEngine() {
           ebitda = year1Rev - ((parseNum(hb.recurring_revenue) * (parseNum(hb.recurring_cogs_pct) / 100)) + (parseNum(hb.product_revenue) * (parseNum(hb.product_cogs_pct) / 100)) + (parseNum(hb.service_revenue) * (parseNum(hb.service_cogs_pct) / 100)));
         }
       } else {
-        // Absolute fallback so the engine never crashes for an unknown entity
         year1Rev = 5000000; ebitda = 1250000; 
       }
 
       console.log(`Final Engine Check -> Year 1 Rev: ${year1Rev}, EBITDA: ${ebitda}`);
-      
       if (isNaN(year1Rev)) year1Rev = 0;
       if (isNaN(ebitda)) ebitda = 0;
 
       if (year1Rev === 0) throw new Error("No revenue drivers found for this entity. Please configure sector data.");
 
       // --- THE 5-YEAR DCF LOOP ---
-      const taxRate = macroData ? (parseNum(macroData.corporate_tax_rate) / 100) : 0.30;
       const safeWacc = wacc / 100; 
       const yoyGrowthRate = 0.05; 
       const terminalGrowthRate = 0.02; 
@@ -190,7 +197,8 @@ export default function ValuationEngine() {
       let currentEbitda = ebitda;
 
       for (let year = 1; year <= 5; year++) {
-        const nopat = currentEbitda * (1 - taxRate);
+        // We now pull the tax rate dynamically from our waccDetails object!
+        const nopat = currentEbitda * (1 - waccDetails.taxRate);
         const fcf = nopat; 
         const pvFcf = fcf / Math.pow(1 + safeWacc, year);
         
@@ -206,6 +214,7 @@ export default function ValuationEngine() {
 
       setResults({
         projections, cumulativePvFcf, terminalValue, pvTerminalValue, wacc, 
+        waccDetails, // Export our new WACC details for the UI!
         enterpriseValue: cumulativePvFcf + pvTerminalValue,
         currency: entityData?.currency || 'USD'
       });
@@ -225,10 +234,12 @@ export default function ValuationEngine() {
       <div className="mb-8 flex items-center justify-between border-b border-slate-200 pb-5">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2"><LineChart className="text-[#002D72]" /> Valuation Engine</h1>
-          <p className="text-slate-500 mt-1 text-sm">Compile data and run the 5-Year DCF models.</p>
+          <p className="text-slate-500 mt-1 text-sm">Compile data, build Capital Structure, and run DCF models.</p>
         </div>
       </div>
+      
       {error && <div className="mb-6 bg-rose-50 border border-rose-200 text-rose-700 px-4 py-3 rounded-lg flex items-center gap-2 text-sm font-bold"><AlertCircle size={18} /> {error}</div>}
+      
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 mb-8 flex flex-col md:flex-row items-end gap-4">
         <div className="flex-1 w-full">
           <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Target Entity</label>
@@ -247,6 +258,42 @@ export default function ValuationEngine() {
 
       {results && (
         <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+          
+          {/* --- THE NEW GLASS BOX: WACC SUMMARY CARD --- */}
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 mb-6 flex flex-col md:flex-row gap-6 justify-between items-center relative overflow-hidden">
+            <div className="absolute top-0 right-0 p-4 opacity-5"><Scale size={100} /></div>
+            
+            <div className="w-full md:w-1/3 border-b md:border-b-0 md:border-r border-slate-100 pb-4 md:pb-0 pr-4 z-10">
+              <h3 className="text-sm font-bold text-slate-500 uppercase flex items-center gap-2 mb-1"><Landmark size={16} /> Cost of Capital</h3>
+              <p className="text-4xl font-black text-[#002D72]">{results.waccDetails.finalWacc.toFixed(2)}%</p>
+              <p className="text-xs text-slate-400 mt-1 font-medium">Calculated WACC used for Discount Rate</p>
+            </div>
+
+            <div className="w-full md:w-2/3 grid grid-cols-2 md:grid-cols-4 gap-4 z-10">
+              <div>
+                <p className="text-xs font-bold text-slate-400 uppercase">Cost of Equity</p>
+                <p className="text-lg font-bold text-slate-800">{results.waccDetails.ke.toFixed(2)}%</p>
+                <p className="text-[10px] text-slate-500 font-medium">Weight: {(results.waccDetails.weightE * 100).toFixed(0)}%</p>
+              </div>
+              <div>
+                <p className="text-xs font-bold text-slate-400 uppercase">Cost of Debt</p>
+                <p className="text-lg font-bold text-slate-800">{results.waccDetails.kd.toFixed(2)}%</p>
+                <p className="text-[10px] text-slate-500 font-medium">Weight: {(results.waccDetails.weightD * 100).toFixed(0)}%</p>
+              </div>
+              <div>
+                <p className="text-xs font-bold text-slate-400 uppercase">Company Beta</p>
+                <p className="text-lg font-bold text-slate-800">{results.waccDetails.beta.toFixed(2)}</p>
+                <p className="text-[10px] text-slate-500 font-medium">Market Volatility</p>
+              </div>
+              <div>
+                <p className="text-xs font-bold text-slate-400 uppercase">Risk-Free Rate</p>
+                <p className="text-lg font-bold text-slate-800">{results.waccDetails.riskFree.toFixed(2)}%</p>
+                <p className="text-[10px] text-slate-500 font-medium">Base Yield</p>
+              </div>
+            </div>
+          </div>
+          {/* ------------------------------------------- */}
+
           <div className="bg-gradient-to-br from-[#002D72] to-[#001a44] p-8 rounded-2xl shadow-xl text-white relative overflow-hidden border border-[#C5A059]/20 mb-8">
             <div className="absolute top-0 right-0 p-8 opacity-10"><DollarSign size={120} /></div>
             <div className="relative z-10 grid grid-cols-1 md:grid-cols-3 gap-8">
