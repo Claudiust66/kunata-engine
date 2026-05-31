@@ -6,7 +6,7 @@ import {
   Building2, Landmark, LayoutDashboard, LogOut, Users, Receipt, 
   Monitor, Banknote, Calculator, Settings, Store, LineChart, 
   ChevronDown, ChevronRight, Wallet, Briefcase, Shield, Umbrella, 
-  Factory, BedDouble, Layers, FileText, DollarSign 
+  Factory, BedDouble, Layers, FileText, DollarSign, RefreshCcw, Scale, ArrowRightLeft 
 } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient'; 
 
@@ -83,6 +83,7 @@ export default function DashboardLayout({ children }) {
         { name: 'General Expenses', href: '/dashboard/expenses', icon: Receipt },
         { name: 'Fixed Assets', href: '/dashboard/assets', icon: Monitor },
         { name: 'Capital Structure', href: '/dashboard/capital-structure', icon: Landmark }, // <--- ADDED RIGHT HERE
+        { name: 'Working Capital', href: '/dashboard/working-capital', icon: RefreshCcw },
         { name: 'Capital & Finance', href: '/dashboard/capital', icon: Banknote },
         { name: 'Tax & Valuation', href: '/dashboard/tax-wacc', icon: Calculator },
       ]
@@ -93,6 +94,8 @@ export default function DashboardLayout({ children }) {
       icon: FileText,
       subItems: [
         { name: 'Income Statement', href: '/dashboard/income-statement', icon: DollarSign },
+        { name: 'Balance Sheet', href: '/dashboard/balance-sheet', icon: Scale },
+        { name: 'Cash Flow Statement', href: '/dashboard/cash-flow', icon: ArrowRightLeft },
         // We will add Balance Sheet and Ratings here later!
       ]
     }
