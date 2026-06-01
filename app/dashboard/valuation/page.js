@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabaseClient'; 
-import { LineChart, Play, Activity, AlertCircle, DollarSign, TrendingUp, Building2, Scale, Landmark, ShieldAlert, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { LineChart, Play, Activity, AlertCircle, DollarSign, TrendingUp, Building2, Scale, Landmark, ShieldAlert, CheckCircle2, AlertTriangle, Download, Printer } from 'lucide-react';
 
 export default function ValuationEngine() {
   const [loading, setLoading] = useState(false);
@@ -17,12 +17,9 @@ export default function ValuationEngine() {
   const fetchEntities = async () => {
     try {
       console.log("Fetching entities for Valuation Engine...");
-      // Using select('*') to bypass any missing column errors
       const { data, error: fetchError } = await supabase.from('entities').select('*').order('entity_name');
-      
       if (fetchError) throw fetchError;
       
-      console.log("Entities returned from Supabase:", data);
       setEntities(data || []);
       if (data && data.length > 0) setSelectedEntity(data[0].entity_name);
     } catch (err) {
@@ -141,7 +138,6 @@ export default function ValuationEngine() {
       const currentRatio = currentLiabilities > 0 ? (currentAssets / currentLiabilities) : 99;
       const debtToEbitda = ebitda > 0 ? (totalDebt / ebitda) : 0;
 
-      // Synthetic Credit Rating Logic
       let riskScore = 0;
       if (interestCoverage > 5) riskScore += 3; else if (interestCoverage > 2) riskScore += 1; else riskScore -= 2;
       if (debtToEquity < 1) riskScore += 3; else if (debtToEquity < 2.5) riskScore += 1; else riskScore -= 2;
@@ -199,18 +195,60 @@ export default function ValuationEngine() {
 
   const formatCurrency = (val, curr) => new Intl.NumberFormat('en-US', { style: 'currency', currency: curr, maximumFractionDigits: 0 }).format(val);
 
+  // --- NEW EXPORT FUNCTIONS ---
+  const handlePrint = () => {
+    window.print();
+  };
+
+  const handleExportCSV = () => {
+    if (!results) return;
+    
+    const headers = ['Year', 'Projected Revenue', 'EBITDA', 'Net Operating Profit (NOPAT)', 'Free Cash Flow (FCF)', 'Present Value of FCF'];
+    
+    const rows = results.projections.map(p => [
+      `Year ${p.year}`,
+      p.revenue.toFixed(2),
+      p.ebitda.toFixed(2),
+      p.nopat.toFixed(2),
+      p.fcf.toFixed(2),
+      p.pvFcf.toFixed(2)
+    ]);
+
+    // Add Valuation Summary to the bottom of the CSV
+    rows.push([], ['VALUATION SUMMARY']);
+    rows.push(['Implied Enterprise Value', results.enterpriseValue.toFixed(2)]);
+    rows.push(['WACC (%)', results.wacc.toFixed(2)]);
+    rows.push(['Risk Grade', results.riskDetails.riskGrade]);
+
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(e => e.join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.setAttribute('download', `${selectedEntity.replace(/\s+/g, '_')}_Valuation.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   return (
-    <div className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8 font-sans">
-      <div className="mb-8 flex items-center justify-between border-b border-slate-200 pb-5">
+    <div className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8 font-sans print:py-0 print:px-0">
+      
+      {/* Header - Hidden on Print */}
+      <div className="mb-8 flex items-center justify-between border-b border-slate-200 pb-5 print:hidden">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2"><LineChart className="text-[#002D72]" /> Valuation & Risk Hub</h1>
           <p className="text-slate-500 mt-1 text-sm">Centralized executive dashboard for DCF Valuation, Cost of Capital, and Risk Ratings.</p>
         </div>
       </div>
       
-      {error && <div className="mb-6 bg-rose-50 border border-rose-200 text-rose-700 px-4 py-3 rounded-lg flex items-center gap-2 text-sm font-bold"><AlertCircle size={18} /> {error}</div>}
+      {error && <div className="mb-6 bg-rose-50 border border-rose-200 text-rose-700 px-4 py-3 rounded-lg flex items-center gap-2 text-sm font-bold print:hidden"><AlertCircle size={18} /> {error}</div>}
       
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 mb-8 flex flex-col md:flex-row items-end gap-4">
+      {/* Control Panel - Hidden on Print */}
+      <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 mb-8 flex flex-col md:flex-row items-end gap-4 print:hidden">
         <div className="flex-1 w-full">
           <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Target Entity</label>
           <div className="relative">
@@ -229,11 +267,27 @@ export default function ValuationEngine() {
       {results && (
         <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
           
+          {/* EXPORT UTILITY BAR - Hidden on Print */}
+          <div className="flex justify-end gap-3 mb-6 print:hidden">
+            <button onClick={handleExportCSV} className="bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-colors shadow-sm">
+              <Download size={16} /> Export CSV
+            </button>
+            <button onClick={handlePrint} className="bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-colors shadow-sm">
+              <Printer size={16} /> Save PDF
+            </button>
+          </div>
+
+          {/* PRINT ONLY: Entity Title */}
+          <div className="hidden print:block mb-8 text-center border-b-2 border-slate-800 pb-4">
+            <h1 className="text-3xl font-black text-slate-900 uppercase tracking-widest">{selectedEntity}</h1>
+            <p className="text-sm font-bold text-slate-500 mt-2 uppercase tracking-widest">Executive Valuation & Risk Report</p>
+          </div>
+
           {/* THE EXECUTIVE DASHBOARD (WACC & RISK MODULES) */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8 print:gap-4">
             
             {/* WACC Glass Box */}
-            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 relative overflow-hidden">
+            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 relative overflow-hidden print:border-slate-300 print:shadow-none">
               <div className="absolute top-0 right-0 p-4 opacity-5"><Scale size={100} /></div>
               <h3 className="text-sm font-bold text-slate-500 uppercase flex items-center gap-2 mb-4"><Landmark size={16} /> Cost of Capital</h3>
               <div className="flex items-end gap-4 mb-6 z-10 relative">
@@ -246,12 +300,12 @@ export default function ValuationEngine() {
               </div>
             </div>
 
-            {/* NEW: Risk Rating Glass Box */}
-            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 relative overflow-hidden">
+            {/* Risk Rating Glass Box */}
+            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 relative overflow-hidden print:border-slate-300 print:shadow-none">
               <div className="absolute top-0 right-0 p-4 opacity-5"><ShieldAlert size={100} /></div>
               <h3 className="text-sm font-bold text-slate-500 uppercase flex items-center gap-2 mb-4"><ShieldAlert size={16} /> Credit & Risk Rating</h3>
               <div className="flex items-end gap-4 mb-6 z-10 relative">
-                <p className={`text-3xl font-black ${results.riskDetails.riskColor}`}>{results.riskDetails.riskGrade}</p>
+                <p className={`text-3xl font-black ${results.riskDetails.riskColor} print:text-slate-800`}>{results.riskDetails.riskGrade}</p>
                 <p className="text-xs text-slate-400 font-medium mb-1.5">Synthetic Grade</p>
               </div>
               <div className="grid grid-cols-2 gap-4 z-10 relative">
@@ -263,23 +317,23 @@ export default function ValuationEngine() {
           </div>
 
           {/* VALUATION BANNER */}
-          <div className="bg-gradient-to-br from-[#002D72] to-[#001a44] p-8 rounded-2xl shadow-xl text-white relative overflow-hidden border border-[#C5A059]/20 mb-8">
-            <div className="absolute top-0 right-0 p-8 opacity-10"><DollarSign size={120} /></div>
+          <div className="bg-gradient-to-br from-[#002D72] to-[#001a44] p-8 rounded-2xl shadow-xl text-white relative overflow-hidden border border-[#C5A059]/20 mb-8 print:bg-none print:text-slate-900 print:border-slate-300 print:shadow-none">
+            <div className="absolute top-0 right-0 p-8 opacity-10 print:hidden"><DollarSign size={120} /></div>
             <div className="relative z-10 grid grid-cols-1 md:grid-cols-3 gap-8">
               <div className="md:col-span-2">
-                <p className="text-sm font-bold text-blue-200 uppercase tracking-widest mb-2 flex items-center gap-2"><TrendingUp size={16} /> Implied Enterprise Value (DCF)</p>
-                <p className="text-5xl md:text-6xl font-black text-[#C5A059] tracking-tight">{formatCurrency(results.enterpriseValue, results.currency)}</p>
-                <p className="text-sm text-blue-300 mt-4 max-w-xl">Calculated using a 5-Year DCF. WACC is <strong>{results.wacc.toFixed(2)}%</strong> and Perpetual Growth Rate is <strong>2.0%</strong>.</p>
+                <p className="text-sm font-bold text-blue-200 uppercase tracking-widest mb-2 flex items-center gap-2 print:text-slate-500"><TrendingUp size={16} /> Implied Enterprise Value (DCF)</p>
+                <p className="text-5xl md:text-6xl font-black text-[#C5A059] tracking-tight print:text-[#002D72]">{formatCurrency(results.enterpriseValue, results.currency)}</p>
+                <p className="text-sm text-blue-300 mt-4 max-w-xl print:text-slate-600">Calculated using a 5-Year DCF. WACC is <strong>{results.wacc.toFixed(2)}%</strong> and Perpetual Growth Rate is <strong>2.0%</strong>.</p>
               </div>
-              <div className="space-y-4 border-t md:border-t-0 md:border-l border-white/10 pt-4 md:pt-0 md:pl-8">
-                <div><p className="text-xs text-blue-300 uppercase tracking-wider font-bold">PV of 5-Yr Cash Flows</p><p className="text-xl font-bold text-white">{formatCurrency(results.cumulativePvFcf, results.currency)}</p></div>
-                <div><p className="text-xs text-blue-300 uppercase tracking-wider font-bold">PV of Terminal Value</p><p className="text-xl font-bold text-white">{formatCurrency(results.pvTerminalValue, results.currency)}</p></div>
+              <div className="space-y-4 border-t md:border-t-0 md:border-l border-white/10 pt-4 md:pt-0 md:pl-8 print:border-slate-300">
+                <div><p className="text-xs text-blue-300 uppercase tracking-wider font-bold print:text-slate-500">PV of 5-Yr Cash Flows</p><p className="text-xl font-bold text-white print:text-slate-900">{formatCurrency(results.cumulativePvFcf, results.currency)}</p></div>
+                <div><p className="text-xs text-blue-300 uppercase tracking-wider font-bold print:text-slate-500">PV of Terminal Value</p><p className="text-xl font-bold text-white print:text-slate-900">{formatCurrency(results.pvTerminalValue, results.currency)}</p></div>
               </div>
             </div>
           </div>
 
           {/* DCF TABLE */}
-          <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden mb-8">
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden mb-8 print:shadow-none print:border-slate-300">
             <div className="overflow-x-auto">
               <table className="w-full text-sm text-left">
                 <thead className="bg-slate-50 text-slate-500 font-bold uppercase text-xs border-b border-slate-200">
@@ -289,8 +343,8 @@ export default function ValuationEngine() {
                   <tr className="hover:bg-slate-50 transition-colors"><td className="px-6 py-4 font-bold text-slate-800">Projected Revenue</td>{results.projections.map(p => <td key={`rev-${p.year}`} className="px-6 py-4 text-right font-medium">{formatCurrency(p.revenue, results.currency)}</td>)}</tr>
                   <tr className="hover:bg-slate-50 transition-colors"><td className="px-6 py-4 font-bold text-slate-800">EBITDA</td>{results.projections.map(p => <td key={`ebitda-${p.year}`} className="px-6 py-4 text-right font-medium">{formatCurrency(p.ebitda, results.currency)}</td>)}</tr>
                   <tr className="hover:bg-slate-50 transition-colors"><td className="px-6 py-4 font-bold text-slate-800">Net Operating Profit (NOPAT)</td>{results.projections.map(p => <td key={`nopat-${p.year}`} className="px-6 py-4 text-right font-medium">{formatCurrency(p.nopat, results.currency)}</td>)}</tr>
-                  <tr className="hover:bg-slate-50 transition-colors bg-blue-50/50"><td className="px-6 py-4 font-bold text-[#002D72]">Free Cash Flow (FCF)</td>{results.projections.map(p => <td key={`fcf-${p.year}`} className="px-6 py-4 text-right font-bold text-[#002D72]">{formatCurrency(p.fcf, results.currency)}</td>)}</tr>
-                  <tr className="hover:bg-slate-50 transition-colors"><td className="px-6 py-4 font-bold text-emerald-600">Present Value of FCF</td>{results.projections.map(p => <td key={`pv-${p.year}`} className="px-6 py-4 text-right font-bold text-emerald-600">{formatCurrency(p.pvFcf, results.currency)}</td>)}</tr>
+                  <tr className="hover:bg-slate-50 transition-colors bg-blue-50/50 print:bg-slate-50"><td className="px-6 py-4 font-bold text-[#002D72]">Free Cash Flow (FCF)</td>{results.projections.map(p => <td key={`fcf-${p.year}`} className="px-6 py-4 text-right font-bold text-[#002D72]">{formatCurrency(p.fcf, results.currency)}</td>)}</tr>
+                  <tr className="hover:bg-slate-50 transition-colors"><td className="px-6 py-4 font-bold text-emerald-600 print:text-slate-800">Present Value of FCF</td>{results.projections.map(p => <td key={`pv-${p.year}`} className="px-6 py-4 text-right font-bold text-emerald-600 print:text-slate-800">{formatCurrency(p.pvFcf, results.currency)}</td>)}</tr>
                 </tbody>
               </table>
             </div>
