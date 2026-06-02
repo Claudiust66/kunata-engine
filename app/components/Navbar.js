@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { Building2, LayoutDashboard, Database, LogOut, User, Key, Settings, ChevronDown } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 
 // We separate the links into their own component so Next.js can safely read the URL parameters
 function NavigationLinks() {
